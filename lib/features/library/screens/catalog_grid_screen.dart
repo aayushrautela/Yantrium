@@ -266,7 +266,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
     return SliverToBoxAdapter(
       child: SizedBox(
         width: double.infinity,
-        height: 600,
+        height: 700,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -282,26 +282,64 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                   return Positioned.fill(
                     child: Transform.translate(
                       offset: Offset(slideOutOffset, 0),
-                      child: previousItem.background != null
-                          ? Image.network(
-                              previousItem.background!,
-                              key: ValueKey(previousItem.id),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                key: ValueKey(previousItem.id),
-                                width: double.infinity,
-                                height: double.infinity,
-                                color: Theme.of(context).colorScheme.muted,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          previousItem.background != null
+                              ? Image.network(
+                                  previousItem.background!,
+                                  key: ValueKey(previousItem.id),
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    key: ValueKey(previousItem.id),
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    color: Theme.of(context).colorScheme.muted,
+                                  ),
+                                )
+                              : Container(
+                                  key: ValueKey(previousItem.id),
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  color: Theme.of(context).colorScheme.muted,
+                                ),
+                          // Gradient to blend left edge
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background.withOpacity(0.6),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.2),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.15, 0.35, 1.0],
                               ),
-                            )
-                          : Container(
-                              key: ValueKey(previousItem.id),
-                              width: double.infinity,
-                              height: double.infinity,
-                              color: Theme.of(context).colorScheme.muted,
                             ),
+                          ),
+                          // Gradient to blend bottom edge
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background.withOpacity(0.6),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.2),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.15, 0.35, 1.0],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -320,50 +358,70 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                 return Positioned.fill(
                   child: Transform.translate(
                     offset: Offset(slideInOffset, 0),
-                    child: currentItem.background != null
-                        ? Image.network(
-                            currentItem.background!,
-                            key: ValueKey(currentItem.id),
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              key: ValueKey(currentItem.id),
-                              width: double.infinity,
-                              height: double.infinity,
-                              color: Theme.of(context).colorScheme.muted,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        currentItem.background != null
+                            ? Image.network(
+                                currentItem.background!,
+                                key: ValueKey(currentItem.id),
+                                fit: BoxFit.cover,
+                                alignment: Alignment.topCenter,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  key: ValueKey(currentItem.id),
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  color: Theme.of(context).colorScheme.muted,
+                                ),
+                              )
+                            : Container(
+                                key: ValueKey(currentItem.id),
+                                width: double.infinity,
+                                height: double.infinity,
+                                color: Theme.of(context).colorScheme.muted,
+                              ),
+                        // Gradient to blend left edge
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Theme.of(context).colorScheme.background,
+                                Theme.of(context).colorScheme.background.withOpacity(0.6),
+                                Theme.of(context).colorScheme.background.withOpacity(0.2),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.15, 0.35, 1.0],
                             ),
-                          )
-                        : Container(
-                            key: ValueKey(currentItem.id),
-                            width: double.infinity,
-                            height: double.infinity,
-                            color: Theme.of(context).colorScheme.muted,
                           ),
+                        ),
+                        // Gradient to blend bottom edge
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Theme.of(context).colorScheme.background,
+                                Theme.of(context).colorScheme.background.withOpacity(0.6),
+                                Theme.of(context).colorScheme.background.withOpacity(0.2),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.15, 0.35, 1.0],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
             
-            // Gradient Overlay (top to bottom)
-            Builder(
-              builder: (context) => Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Theme.of(context).colorScheme.background.withOpacity(0.3),
-                      Theme.of(context).colorScheme.background,
-                    ],
-                    stops: const [0.0, 0.7, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            
-            // Left side darkening overlay
+            // Gradient to blend left edge (vertical fade from left to right)
             Builder(
               builder: (context) => Container(
                 decoration: BoxDecoration(
@@ -371,11 +429,30 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      Colors.black.withOpacity(0.4),
-                      Colors.black.withOpacity(0.2),
+                      Theme.of(context).colorScheme.background,
+                      Theme.of(context).colorScheme.background.withOpacity(0.6),
+                      Theme.of(context).colorScheme.background.withOpacity(0.2),
                       Colors.transparent,
                     ],
-                    stops: const [0.0, 0.3, 0.6],
+                    stops: const [0.0, 0.15, 0.35, 1.0],
+                  ),
+                ),
+              ),
+            ),
+            // Gradient to blend bottom edge (horizontal fade from bottom to top)
+            Builder(
+              builder: (context) => Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Theme.of(context).colorScheme.background,
+                      Theme.of(context).colorScheme.background.withOpacity(0.6),
+                      Theme.of(context).colorScheme.background.withOpacity(0.2),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.15, 0.35, 1.0],
                   ),
                 ),
               ),
@@ -598,7 +675,15 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                   Row(
                     children: [
                       PrimaryButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => CatalogItemDetailScreen(
+                                item: currentItem,
+                              ),
+                            ),
+                          );
+                        },
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -614,21 +699,15 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                       const SizedBox(width: 16),
                       SecondaryButton(
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => CatalogItemDetailScreen(
-                                item: currentItem,
-                              ),
-                            ),
-                          );
+                          // TODO: Implement add to library functionality
                         },
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.info_outline, size: 24),
+                            Icon(Icons.add, size: 24),
                             SizedBox(width: 10),
                             Text(
-                              'More Info',
+                              'Add to Library',
                               style: TextStyle(fontSize: 16),
                             ),
                           ],

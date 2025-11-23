@@ -91,19 +91,35 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                       color: Theme.of(context).colorScheme.muted,
                     ),
                   ),
-                  // Gradient to blend left and bottom edges
+                  // Gradient to blend left edge (vertical fade from left to right)
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topRight,
-                        end: Alignment.bottomLeft,
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                         colors: [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Theme.of(context).colorScheme.background.withOpacity(0.5),
                           Theme.of(context).colorScheme.background,
+                          Theme.of(context).colorScheme.background.withOpacity(0.6),
+                          Theme.of(context).colorScheme.background.withOpacity(0.2),
+                          Colors.transparent,
                         ],
-                        stops: const [0.0, 0.4, 0.8, 1.0],
+                        stops: const [0.0, 0.15, 0.35, 1.0],
+                      ),
+                    ),
+                  ),
+                  // Gradient to blend bottom edge (horizontal fade from bottom to top)
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Theme.of(context).colorScheme.background,
+                          Theme.of(context).colorScheme.background.withOpacity(0.6),
+                          Theme.of(context).colorScheme.background.withOpacity(0.2),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.15, 0.35, 1.0],
                       ),
                     ),
                   ),
@@ -351,7 +367,7 @@ class _TabButton extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 18,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               color: isSelected
                   ? Colors.yellow
@@ -362,7 +378,7 @@ class _TabButton extends StatelessWidget {
           if (isSelected)
             Container(
               height: 2,
-              width: label.length * 8.0,
+              width: label.length * 10.0,
               color: Colors.yellow,
             ),
         ],

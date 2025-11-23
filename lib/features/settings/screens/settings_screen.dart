@@ -248,11 +248,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             )
           else
-            ..._addons.map((addon) => Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppConstants.horizontalMargin,
-                    vertical: 4,
-                  ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.horizontalMargin,
+              ),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: _addons.map((addon) => SizedBox(
+                  width: 400,
                   child: Clickable(
                     onPressed: () {
                       Navigator.of(context).push(
@@ -267,28 +271,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(addon.name).h4(),
-                                  const SizedBox(height: 4),
-                                  Text('Version: ${addon.version}').muted(),
-                                  if (addon.description != null) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      addon.description!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ).muted(),
-                                  ],
-                                ],
-                              ),
-                            ),
                             Row(
-                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(addon.name).h4(),
+                                      const SizedBox(height: 4),
+                                      Text('Version: ${addon.version}').muted(),
+                                      if (addon.description != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          addon.description!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ).muted(),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 Switch(
                                   value: addon.enabled,
@@ -307,7 +317,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
-                )),
+                )).toList(),
+              ),
+            ),
           const SizedBox(height: 16),
 
           // Catalog Management Section
@@ -344,72 +356,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             )
           else
-            ..._catalogs.map((catalog) => Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppConstants.horizontalMargin,
-                    vertical: 4,
-                  ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.horizontalMargin,
+              ),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: _catalogs.map((catalog) => SizedBox(
+                  width: 400,
                   child: Card(
                     child: Padding(
-                      padding: AppConstants.contentPadding,
-                      child: Row(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(catalog.catalogName).h4(),
-                                    if (catalog.isHeroSource) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(catalog.catalogName).h4(),
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'HERO',
-                                          style: TextStyle(
-                                            color: Theme.of(context).colorScheme.primaryForeground,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
+                                        if (catalog.isHeroSource)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context).colorScheme.primary,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'HERO',
+                                              style: TextStyle(
+                                                color: Theme.of(context).colorScheme.primaryForeground,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text('${catalog.addonName} • ${_capitalize(catalog.catalogType)}').muted(),
+                                    if (catalog.catalogId != null && catalog.catalogId!.isNotEmpty)
+                                      Text('ID: ${catalog.catalogId}').muted().small(),
                                   ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text('${catalog.addonName} • ${_capitalize(catalog.catalogType)}').muted(),
-                                if (catalog.catalogId != null && catalog.catalogId!.isNotEmpty)
-                                  Text('ID: ${catalog.catalogId}').muted().small(),
-                              ],
-                            ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Hero selection button
-                              GhostButton(
-                                onPressed: () => _setHeroCatalog(catalog),
-                                density: ButtonDensity.icon,
-                                child: Icon(
-                                  catalog.isHeroSource ? Icons.star : Icons.star_border,
-                                  color: catalog.isHeroSource
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
                               ),
-                              const SizedBox(width: 8),
-                              // Enable/disable toggle
-                              Switch(
-                                value: catalog.enabled,
-                                onChanged: (value) => _toggleCatalog(catalog, value),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (catalog.isHeroSource)
+                                const SizedBox.shrink()
+                              else
+                                const SizedBox.shrink(),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Hero selection button
+                                  GhostButton(
+                                    onPressed: () => _setHeroCatalog(catalog),
+                                    density: ButtonDensity.icon,
+                                    child: Icon(
+                                      catalog.isHeroSource ? Icons.star : Icons.star_border,
+                                      color: catalog.isHeroSource
+                                          ? Theme.of(context).colorScheme.primary
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Enable/disable toggle
+                                  Switch(
+                                    value: catalog.enabled,
+                                    onChanged: (value) => _toggleCatalog(catalog, value),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -417,7 +448,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
-                )),
+                )).toList(),
+              ),
+            ),
           const SizedBox(height: AppConstants.sectionSpacing),
 
           // Appearance Section
