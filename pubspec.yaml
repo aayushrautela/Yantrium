@@ -52,6 +52,11 @@ dependencies:
   
   # UI Framework
   shadcn_flutter: ^0.0.47
+  
+  # Video playback
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.6
+  media_kit_libs_linux: ^1.0.5
 
 dev_dependencies:
   flutter_test:

@@ -723,6 +723,16 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
     }
   }
 
+  /// Extract the first date from a date string (handles date ranges like "2022-09-27 - 2025-11-23")
+  String _extractFirstDate(String releaseInfo) {
+    // If it contains " - " (space-hyphen-space), it's a date range - take the first part
+    if (releaseInfo.contains(' - ')) {
+      return releaseInfo.split(' - ').first.trim();
+    }
+    // Otherwise, just return the date as is
+    return releaseInfo;
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -1127,25 +1137,21 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                     runSpacing: 10,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      // Match percentage
-                      if (currentItem.imdbRating != null)
-                        Text(
-                          '${((double.tryParse(currentItem.imdbRating!) ?? 0) * 10).toInt()}% Match',
-                          style: TextStyle(
-                            color: Colors.green[400],
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      
-                      // Year range
+                      // Date (first date only)
                       if (currentItem.releaseInfo != null)
                         Text(
-                          currentItem.releaseInfo!,
+                          _extractFirstDate(currentItem.releaseInfo!),
                           style: const TextStyle(fontSize: 16),
                         ),
                       
-                      // Rating badge
+                      // Seasons (for series)
+                      if (currentItem.type == 'series' && _numberOfSeasons != null)
+                        Text(
+                          _numberOfSeasons!,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      
+                      // Rating badge (maturity)
                       if (_maturityRating != null)
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -1162,13 +1168,6 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                             _maturityRating!,
                             style: const TextStyle(fontSize: 14),
                           ),
-                        ),
-                      
-                      // Seasons (for series)
-                      if (currentItem.type == 'series' && _numberOfSeasons != null)
-                        Text(
-                          _numberOfSeasons!,
-                          style: const TextStyle(fontSize: 16),
                         ),
                       
                       // Genres

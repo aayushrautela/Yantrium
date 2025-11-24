@@ -339,52 +339,54 @@ class LibraryRepository {
     }
   }
 
-  /// Search for items across all enabled catalogs
+  /// Search for items across TMDB API
   /// Returns items matching the query, sorted by popularity (imdbRating)
   Future<List<CatalogItem>> searchItems(String query) async {
     if (query.trim().isEmpty) {
       return [];
     }
 
-    final queryLower = query.toLowerCase().trim();
-    final allCatalogs = await getAllCatalogs();
-    final List<CatalogItem> results = [];
+    try {
+      // Search both movies and TV shows from TMDB API
+      final movieResults = await _tmdbService.searchMovies(query);
+      final tvResults = await _tmdbService.searchTv(query);
 
-    // Search through all catalog items
-    for (final catalogList in allCatalogs.values) {
-      for (final item in catalogList) {
-        // Search in name, description, and genres
-        final nameMatch = item.name.toLowerCase().contains(queryLower);
-        final descriptionMatch = item.description?.toLowerCase().contains(queryLower) ?? false;
-        final genreMatch = item.genres?.any((genre) => genre.toLowerCase().contains(queryLower)) ?? false;
+      // Combine and convert to CatalogItem
+      final allResults = <CatalogItem>[];
 
-        if (nameMatch || descriptionMatch || genreMatch) {
-          results.add(item);
+      for (final movieData in movieResults) {
+        try {
+          allResults.add(CatalogItem.fromJson(movieData));
+        } catch (e) {
+          // Skip invalid items
+          continue;
         }
       }
-    }
 
-    // Remove duplicates (same id)
-    final uniqueResults = <String, CatalogItem>{};
-    for (final item in results) {
-      if (!uniqueResults.containsKey(item.id)) {
-        uniqueResults[item.id] = item;
+      for (final tvData in tvResults) {
+        try {
+          allResults.add(CatalogItem.fromJson(tvData));
+        } catch (e) {
+          // Skip invalid items
+          continue;
+        }
       }
+
+      // Sort by rating (highest first), then by name
+      allResults.sort((a, b) {
+        final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
+        final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
+
+        if (ratingB != ratingA) {
+          return ratingB.compareTo(ratingA);
+        }
+        return a.name.compareTo(b.name);
+      });
+
+      return allResults;
+    } catch (e) {
+      debugPrint('Error searching TMDB: $e');
+      return [];
     }
-
-    // Sort by popularity (imdbRating) - higher rating first
-    final sortedResults = uniqueResults.values.toList();
-    sortedResults.sort((a, b) {
-      final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
-      final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
-      
-      // Sort by rating descending, then by name ascending
-      if (ratingB != ratingA) {
-        return ratingB.compareTo(ratingA);
-      }
-      return a.name.compareTo(b.name);
-    });
-
-    return sortedResults;
   }
 }

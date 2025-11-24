@@ -132,17 +132,54 @@ class AddonClient {
   Future<Map<String, List<dynamic>>> getStreams(String type, String id) async {
     try {
       final path = '/stream/$type/${Uri.encodeComponent(id)}.json';
+      
+      if (kDebugMode) {
+        debugPrint('AddonClient: Making GET request to: $path');
+        debugPrint('AddonClient: Full URL: ${_dio.options.baseUrl}$path');
+      }
+      
       final response = await _dio.get(path);
+      
+      if (kDebugMode) {
+        debugPrint('AddonClient: Response status: ${response.statusCode}');
+        debugPrint('AddonClient: Response headers: ${response.headers}');
+        debugPrint('AddonClient: Raw response data type: ${response.data.runtimeType}');
+        debugPrint('AddonClient: Raw response data: ${response.data}');
+      }
+      
       final data = response.data as Map<String, dynamic>;
+      
+      if (kDebugMode) {
+        debugPrint('AddonClient: Parsed data keys: ${data.keys.toList()}');
+        debugPrint('AddonClient: Full parsed data: $data');
+      }
+      
       final streams = data['streams'] as List<dynamic>? ?? [];
+      
+      if (kDebugMode) {
+        debugPrint('AddonClient: Extracted ${streams.length} stream(s) from response');
+      }
+      
       return {'streams': streams};
     } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('AddonClient: DioException - Status: ${e.response?.statusCode}');
+        debugPrint('AddonClient: DioException - Message: ${e.message}');
+        debugPrint('AddonClient: DioException - Response data: ${e.response?.data}');
+      }
+      
       // 404 responses for streams return empty lists (not errors)
       if (e.response?.statusCode == 404) {
+        if (kDebugMode) {
+          debugPrint('AddonClient: 404 response, returning empty streams list');
+        }
         return {'streams': <dynamic>[]};
       }
       throw Exception('Failed to fetch streams: ${e.message}');
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AddonClient: General exception: $e');
+      }
       throw Exception('Failed to fetch streams: $e');
     }
   }

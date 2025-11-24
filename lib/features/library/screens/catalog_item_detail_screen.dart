@@ -1,10 +1,15 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' as material;
 import '../models/catalog_item.dart';
 import '../models/cast_crew_member.dart';
 import '../models/episode.dart';
+import '../models/stream_info.dart';
 import '../../../core/constants/app_constants.dart';
 import '../logic/library_repository.dart';
+import '../logic/stream_service.dart';
+import '../../player/screens/video_player_screen.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
 import '../../../core/services/tmdb_service.dart';
@@ -29,6 +34,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   int _selectedTab = 0;
   late final LibraryRepository _libraryRepository;
   late final TmdbService _tmdbService;
+  late final StreamService _streamService;
   CatalogItem? _enrichedItem;
   List<CastCrewMember> _cast = [];
   List<CastCrewMember> _crew = [];
@@ -45,8 +51,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _libraryRepository = LibraryRepository(AppDatabase());
+    final database = AppDatabase();
+    _libraryRepository = LibraryRepository(database);
     _tmdbService = TmdbService();
+    _streamService = StreamService(database);
     _enrichItem();
     _loadCastAndCrew();
   }
@@ -100,6 +108,426 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         setState(() {
           _enrichedItem = widget.item;
         });
+      }
+    }
+  }
+
+  Future<void> _handlePlayButton() async {
+    final item = _enrichedItem ?? widget.item;
+    
+    if (kDebugMode) {
+      debugPrint('Play button clicked for: ${item.name} (${item.id}, type: ${item.type})');
+    }
+    
+    // For series, we need an episode ID
+    String? episodeId;
+    Episode? firstEpisode;
+    int? firstSeasonNumber;
+    if (item.type == 'series') {
+      // Load seasons and episodes if not already loaded
+      if (_seasons.isEmpty) {
+        await _loadSeasonsAndEpisodes(item);
+      }
+      
+      // Get the first episode from season 1
+      if (_seasons.isNotEmpty) {
+        final firstSeason = _seasons.firstWhere(
+          (s) => s.seasonNumber == 1,
+          orElse: () => _seasons.first,
+        );
+        
+        if (firstSeason.episodes.isNotEmpty) {
+          firstEpisode = firstSeason.episodes.first;
+          firstSeasonNumber = firstSeason.seasonNumber;
+          // Format episode ID as {showId}:{season}:{episode}
+          // First, get the IMDB ID for the show
+          final imdbId = await _getImdbIdForItem(item);
+          if (imdbId != null) {
+            episodeId = '$imdbId:${firstSeason.seasonNumber}:${firstEpisode.episodeNumber}';
+            if (kDebugMode) {
+              debugPrint('Using episode ID for series: $episodeId (Season ${firstSeason.seasonNumber}, Episode ${firstEpisode.episodeNumber})');
+            }
+          } else {
+            if (kDebugMode) {
+              debugPrint('Could not get IMDB ID for series, cannot generate episode ID');
+            }
+            if (mounted) {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Cannot Play Series'),
+                  content: const Text('Unable to identify this series. Please try again.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return;
+          }
+        } else {
+          if (kDebugMode) {
+            debugPrint('No episodes found in first season');
+          }
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('No Episodes Available'),
+                content: const Text('No episodes were found for this series.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint('No seasons found for series');
+        }
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('No Seasons Available'),
+              content: const Text('No seasons were found for this series.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
+    
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+    
+    try {
+      // Fetch streams from all enabled addons
+      if (kDebugMode) {
+        debugPrint('Fetching streams from addons...');
+      }
+      
+      final streams = await _streamService.getStreamsForItem(item, episodeId: episodeId, cachedTmdbData: _tmdbMetadata);
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (kDebugMode) {
+        debugPrint('Found ${streams.length} stream(s)');
+      }
+      
+      if (streams.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('No streams available for ${item.name}');
+        }
+        // Show message that no streams are available
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('No Streams Available'),
+              content: const Text('No streams were found for this content. Please try enabling more addons.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show stream selection dialog
+      if (mounted) {
+        final selectedStream = await showDialog<StreamInfo>(
+          context: context,
+          builder: (context) => _StreamSelectionDialog(
+            title: item.type == 'series' && episodeId != null
+                ? '${item.name} - S${episodeId.split(':')[1]}E${episodeId.split(':')[2]}'
+                : item.name,
+            streams: streams,
+          ),
+        );
+        
+        if (selectedStream != null) {
+          if (kDebugMode) {
+            debugPrint('Selected stream: ${selectedStream.url}');
+            debugPrint('Stream quality: ${selectedStream.quality ?? 'Unknown'}');
+            debugPrint('Stream addon: ${selectedStream.addonName ?? selectedStream.addonId ?? 'Unknown'}');
+          }
+          
+          // Navigate to video player with selected stream
+          if (mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  streamUrl: selectedStream.url,
+                  title: item.type == 'series' && episodeId != null
+                      ? '${item.name} - S${episodeId.split(':')[1]}E${episodeId.split(':')[2]}'
+                      : item.name,
+                  subtitles: selectedStream.subtitles?.map((s) => s.url).toList(),
+                  logoUrl: item.logo,
+                  description: item.type == 'series' && firstEpisode != null
+                      ? (firstEpisode.overview ?? item.description)
+                      : item.description,
+                  episodeName: item.type == 'series' ? firstEpisode?.name : null,
+                  seasonNumber: item.type == 'series' ? firstSeasonNumber : null,
+                  episodeNumber: item.type == 'series' ? firstEpisode?.episodeNumber : null,
+                  isMovie: item.type == 'movie',
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      // Close loading dialog if still open
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (kDebugMode) {
+        debugPrint('Error loading streams for ${item.name}: $e');
+        debugPrint('Stack trace: $stackTrace');
+      }
+      
+      // Show error dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to load streams: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  /// Helper method to get IMDB ID for an item (similar to StreamService._getImdbId)
+  Future<String?> _getImdbIdForItem(CatalogItem item) async {
+    // If already an IMDB ID, use it directly
+    if (IdParser.isImdbId(item.id)) {
+      if (kDebugMode) {
+        debugPrint('CatalogItemDetailScreen: Item already has IMDB ID: ${item.id}');
+      }
+      return item.id;
+    }
+
+    // Try to extract TMDB ID
+    final tmdbId = IdParser.extractTmdbId(item.id);
+    if (tmdbId == null) {
+      if (kDebugMode) {
+        debugPrint('CatalogItemDetailScreen: Could not extract TMDB ID from ${item.id}');
+      }
+      return null;
+    }
+
+    // Fetch TMDB metadata to get IMDB ID
+    try {
+      Map<String, dynamic>? tmdbData;
+      if (item.type == 'movie') {
+        tmdbData = await _tmdbService.getMovieMetadata(tmdbId);
+      } else if (item.type == 'series') {
+        tmdbData = await _tmdbService.getTvMetadata(tmdbId);
+      }
+
+      if (tmdbData != null) {
+        final externalIds = tmdbData['external_ids'] as Map<String, dynamic>?;
+        final imdbId = externalIds?['imdb_id'] as String?;
+        if (kDebugMode) {
+          debugPrint('CatalogItemDetailScreen: Extracted IMDB ID from TMDB: $imdbId');
+        }
+        return imdbId;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('CatalogItemDetailScreen: Error fetching IMDB ID from TMDB: $e');
+      }
+    }
+
+    return null;
+  }
+
+  /// Handle playing a specific episode
+  Future<void> _handleEpisodePlay(CatalogItem seriesItem, int seasonNumber, Episode episode) async {
+    if (kDebugMode) {
+      debugPrint('Episode play clicked: ${episode.name} (S${seasonNumber}E${episode.episodeNumber})');
+    }
+    
+    // Get the IMDB ID for the series
+    final imdbId = await _getImdbIdForItem(seriesItem);
+    if (imdbId == null) {
+      if (kDebugMode) {
+        debugPrint('Could not get IMDB ID for series, cannot generate episode ID');
+      }
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Cannot Play Episode'),
+            content: const Text('Unable to identify this series. Please try again.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Format episode ID as {showId}:{season}:{episode}
+    final episodeId = '$imdbId:$seasonNumber:${episode.episodeNumber}';
+    
+    if (kDebugMode) {
+      debugPrint('Using episode ID: $episodeId');
+    }
+    
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+    
+    try {
+      // Fetch streams from all enabled addons
+      if (kDebugMode) {
+        debugPrint('Fetching streams for episode...');
+      }
+      
+      final streams = await _streamService.getStreamsForItem(seriesItem, episodeId: episodeId);
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (kDebugMode) {
+        debugPrint('Found ${streams.length} stream(s) for episode');
+      }
+      
+      if (streams.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('No streams available for episode');
+        }
+        // Show message that no streams are available
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('No Streams Available'),
+              content: const Text('No streams were found for this episode. Please try enabling more addons.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show stream selection dialog
+      if (mounted) {
+        final selectedStream = await showDialog<StreamInfo>(
+          context: context,
+          builder: (context) => _StreamSelectionDialog(
+            title: '${seriesItem.name} - S${seasonNumber}E${episode.episodeNumber}',
+            streams: streams,
+          ),
+        );
+        
+        if (selectedStream != null) {
+          if (kDebugMode) {
+            debugPrint('Selected stream: ${selectedStream.url}');
+            debugPrint('Stream quality: ${selectedStream.quality ?? 'Unknown'}');
+            debugPrint('Stream addon: ${selectedStream.addonName ?? selectedStream.addonId ?? 'Unknown'}');
+          }
+          
+          // Navigate to video player with selected stream
+          if (mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  streamUrl: selectedStream.url,
+                  title: '${seriesItem.name} - S${seasonNumber}E${episode.episodeNumber}',
+                  subtitles: selectedStream.subtitles?.map((s) => s.url).toList(),
+                  logoUrl: seriesItem.logo,
+                  description: episode.overview ?? seriesItem.description,
+                  episodeName: episode.name,
+                  seasonNumber: seasonNumber,
+                  episodeNumber: episode.episodeNumber,
+                  isMovie: false,
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      // Close loading dialog if still open
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (kDebugMode) {
+        debugPrint('Error loading streams for episode: $e');
+        debugPrint('Stack trace: $stackTrace');
+      }
+      
+      // Show error dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to load streams: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
@@ -327,7 +755,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                   return Text(
                                     item.name.toUpperCase(),
                                     style: const TextStyle(
-                                      fontSize: 48,
+                                      fontSize: 60,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.yellow,
                                     ),
@@ -339,7 +767,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                             Text(
                               item.name.toUpperCase(),
                               style: const TextStyle(
-                                fontSize: 48,
+                                fontSize: 60,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.yellow,
                               ),
@@ -353,37 +781,42 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                             runSpacing: 10,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // Match percentage
-                              if (item.imdbRating != null)
-                                Text(
-                                  // Fixed Math Logic: ((Rating ?? 0) * 10)
-                                  '${((double.tryParse(item.imdbRating!) ?? 0) * 10).toInt()}% Match',
-                                  style: TextStyle(
-                                    color: Colors.green[400],
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-
-                              // Year
+                              // Date (first date only)
                               if (item.releaseInfo != null)
                                 Text(
-                                  item.releaseInfo!
-                                      .split('-')
-                                      .first, // Extract year
-                                  style: const TextStyle(fontSize: 16),
+                                  _extractFirstDate(item.releaseInfo!),
+                                  style: const TextStyle(fontSize: 18),
                                 ),
-
-                              // Rating badge
-                              if (_maturityRating != null)
-                                _buildMaturityRating(_maturityRating, showDescription: false),
 
                               // Seasons (for series)
                               if (item.type == 'series' && _numberOfSeasons != null)
                                 Text(
                                   _numberOfSeasons!,
-                                  style: const TextStyle(fontSize: 16),
+                                  style: const TextStyle(fontSize: 18),
                                 ),
+
+                              // Rating badge (maturity)
+                              if (_maturityRating != null)
+                                _buildMaturityRating(_maturityRating, showDescription: false),
+
+                              // Genres
+                              if (item.genres != null && item.genres!.isNotEmpty)
+                                ...item.genres!.take(2).map((genre) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Theme.of(context).colorScheme.mutedForeground,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        genre,
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                    )),
 
                               // HD badge
                               Container(
@@ -400,11 +833,16 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                 ),
                                 child: const Text(
                                   'HD',
-                                  style: TextStyle(fontSize: 14),
+                                  style: TextStyle(fontSize: 16),
                                 ),
                               ),
                             ],
                           ),
+
+                          const SizedBox(height: 16),
+
+                          // Rating icons row
+                          _buildRatingIconsRow(),
 
                           const SizedBox(height: 20),
 
@@ -428,7 +866,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                           Row(
                             children: [
                               PrimaryButton(
-                                onPressed: () {},
+                                onPressed: () => _handlePlayButton(),
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -833,7 +1271,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
           ),
           child: Text(
             rating ?? 'N/A',
-            style: const TextStyle(fontSize: 14),
+            style: const TextStyle(fontSize: 16),
           ),
         ),
         if (hasRating && showDescription) ...[
@@ -848,6 +1286,128 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  /// Extract the first date from a date string (handles date ranges like "2022-09-27 - 2025-11-23")
+  String _extractFirstDate(String releaseInfo) {
+    // If it contains " - " (space-hyphen-space), it's a date range - take the first part
+    if (releaseInfo.contains(' - ')) {
+      return releaseInfo.split(' - ').first.trim();
+    }
+    // Otherwise, just return the date as is
+    return releaseInfo;
+  }
+
+  /// Format episode air date for display
+  String _formatEpisodeDate(String airDate) {
+    // TMDB dates are typically in YYYY-MM-DD format, return as is
+    // If we need to format differently, parse and reformat here
+    return airDate;
+  }
+
+  /// Build a row of rating icons (TMDB, IMDb, Rotten Tomatoes, Metacritic)
+  Widget _buildRatingIconsRow() {
+    // For development phase, use placeholder values (99)
+    // In production, these would come from the item or TMDB metadata
+    // Only show if rating is present (for production), but for dev we'll always show with 99
+    String? tmdbRating;
+    if (_tmdbMetadata?['vote_average'] != null) {
+      tmdbRating = (_tmdbMetadata!['vote_average'] as num).toStringAsFixed(1);
+    } else {
+      tmdbRating = '99'; // Placeholder for development
+    }
+    
+    String? imdbRating = widget.item.imdbRating ?? '99'; // Placeholder for development
+    String? rottenTomatoesRating = '99'; // Placeholder for development
+    String? metacriticRating = '99'; // Placeholder for development
+
+    final ratings = <Map<String, dynamic>>[];
+    
+    if (tmdbRating != null) {
+      ratings.add({
+        'icon': Icons.movie,
+        'label': 'TMDB',
+        'rating': tmdbRating,
+        'color': Colors.blue,
+      });
+    }
+    
+    if (imdbRating != null) {
+      ratings.add({
+        'icon': Icons.star,
+        'label': 'IMDb',
+        'rating': imdbRating,
+        'color': Colors.amber,
+      });
+    }
+    
+    if (rottenTomatoesRating != null) {
+      ratings.add({
+        'icon': Icons.local_movies,
+        'label': 'RT',
+        'rating': rottenTomatoesRating,
+        'color': Colors.red,
+      });
+    }
+    
+    if (metacriticRating != null) {
+      ratings.add({
+        'icon': Icons.rate_review,
+        'label': 'MC',
+        'rating': metacriticRating,
+        'color': Colors.green,
+      });
+    }
+
+    if (ratings.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: ratings.asMap().entries.map((entry) {
+        final index = entry.key;
+        final rating = entry.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildRatingIcon(
+              icon: rating['icon'] as IconData,
+              label: rating['label'] as String,
+              rating: rating['rating'] as String,
+              color: rating['color'] as Color,
+            ),
+            if (index < ratings.length - 1) const SizedBox(width: 16),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  /// Build a single rating icon widget
+  Widget _buildRatingIcon({
+    required IconData icon,
+    required String label,
+    required String rating,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 22,
+          color: color,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label: $rating',
+          style: TextStyle(
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.foreground,
+          ),
+        ),
       ],
     );
   }
@@ -1233,7 +1793,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                     itemCount: selectedSeason.episodes.length,
                     itemBuilder: (context, index) {
                       final episode = selectedSeason.episodes[index];
-                      return _EpisodeCard(episode: episode);
+                      return _EpisodeCard(
+                        episode: episode,
+                        seriesItem: item,
+                        seasonNumber: selectedSeason.seasonNumber,
+                        onPlay: () => _handleEpisodePlay(item, selectedSeason.seasonNumber, episode),
+                      );
                     },
                   );
                 },
@@ -1576,8 +2141,16 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
 
 class _EpisodeCard extends StatefulWidget {
   final Episode episode;
+  final CatalogItem seriesItem;
+  final int seasonNumber;
+  final VoidCallback onPlay;
 
-  const _EpisodeCard({required this.episode});
+  const _EpisodeCard({
+    required this.episode,
+    required this.seriesItem,
+    required this.seasonNumber,
+    required this.onPlay,
+  });
 
   @override
   State<_EpisodeCard> createState() => _EpisodeCardState();
@@ -1585,6 +2158,45 @@ class _EpisodeCard extends StatefulWidget {
 
 class _EpisodeCardState extends State<_EpisodeCard> {
   bool _isHovered = false;
+
+  /// Format episode air date for display
+  String _formatEpisodeDate(String airDate) {
+    // TMDB dates are typically in YYYY-MM-DD format, return as is
+    // If we need to format differently, parse and reformat here
+    return airDate;
+  }
+
+  /// Check if episode is not released yet
+  bool _isEpisodeNotReleased() {
+    if (widget.episode.airDate == null || widget.episode.airDate!.isEmpty) {
+      return true;
+    }
+    try {
+      final airDate = DateTime.parse(widget.episode.airDate!);
+      return airDate.isAfter(DateTime.now());
+    } catch (e) {
+      // If parsing fails, assume it's not released
+      return true;
+    }
+  }
+
+  /// Get episode description, or "To be announced" if not released and description is empty
+  String _getEpisodeDescription() {
+    final hasDescription = widget.episode.overview != null && 
+                          widget.episode.overview!.isNotEmpty;
+    
+    if (hasDescription) {
+      return widget.episode.overview!;
+    }
+    
+    // If no description and episode is not released, show "To be announced"
+    if (_isEpisodeNotReleased()) {
+      return 'To be announced';
+    }
+    
+    // If no description but episode is released, return empty string
+    return '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1596,12 +2208,14 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          color: Theme.of(context).colorScheme.background,
-          child: ClipRect(
-            child: Column(
+      child: Clickable(
+        onPressed: widget.onPlay,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            color: Theme.of(context).colorScheme.background,
+            child: ClipRect(
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1632,7 +2246,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                           Container(
                                         width: double.infinity,
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.muted,
+                                          color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
                                           borderRadius: const BorderRadius.only(
                                             topLeft: Radius.circular(8),
                                             topRight: Radius.circular(8),
@@ -1669,7 +2283,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                   : Container(
                                       width: double.infinity,
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.muted,
+                                        color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
                                         borderRadius: const BorderRadius.only(
                                           topLeft: Radius.circular(8),
                                           topRight: Radius.circular(8),
@@ -1696,11 +2310,11 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             ),
                           ),
                         ),
-                        // Duration overlay
+                        // Runtime overlay
                         if (widget.episode.runtime != null)
                           Positioned(
                             bottom: 8,
-                            right: 8,
+                            right: widget.episode.airDate != null ? 100 : 8,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
@@ -1714,6 +2328,55 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                   color: Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Date overlay
+                        if (widget.episode.airDate != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _formatEpisodeDate(widget.episode.airDate!),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Play button overlay (shown on hover)
+                        if (_isHovered)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(8),
+                                  topRight: Radius.circular(8),
+                                ),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.play_arrow,
+                                    color: Colors.white,
+                                    size: 40,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1748,25 +2411,22 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                           ),
 
                           // Episode description
-                          if (widget.episode.overview != null &&
-                              widget.episode.overview!.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Flexible(
-                              child: Text(
-                                widget.episode.overview!,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .foreground
-                                      .withOpacity(0.7),
-                                  height: 1.4,
-                                ),
-                                maxLines: 5,
-                                overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 6),
+                          Flexible(
+                            child: Text(
+                              _getEpisodeDescription(),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .foreground
+                                    .withOpacity(0.7),
+                                height: 1.4,
                               ),
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
@@ -1774,6 +2434,208 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                 ),
               ],
             ),
+          ),
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple dialog to select a stream
+class _StreamSelectionDialog extends StatelessWidget {
+  final String title;
+  final List<StreamInfo> streams;
+
+  const _StreamSelectionDialog({
+    required this.title,
+    required this.streams,
+  });
+
+  String _getStreamDisplayName(StreamInfo stream) {
+    final parts = <String>[];
+    
+    if (stream.name != null && stream.name!.isNotEmpty) {
+      parts.add(stream.name!);
+    } else if (stream.title != null && stream.title!.isNotEmpty) {
+      parts.add(stream.title!);
+    }
+    
+    if (stream.quality != null && stream.quality!.isNotEmpty) {
+      parts.add(stream.quality!);
+    }
+    
+    if (stream.addonName != null && stream.addonName!.isNotEmpty) {
+      parts.add('(${stream.addonName})');
+    }
+    
+    return parts.isNotEmpty ? parts.join(' • ') : 'Stream';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return material.Dialog(
+      child: material.Container(
+          width: 500,
+          constraints: const material.BoxConstraints(maxHeight: 600),
+          padding: const material.EdgeInsets.all(24),
+          child: material.Column(
+            mainAxisSize: material.MainAxisSize.min,
+            crossAxisAlignment: material.CrossAxisAlignment.start,
+            children: [
+              // Header
+              material.Row(
+                children: [
+                  material.Expanded(
+                    child: Text(title).h4(),
+                  ),
+                  material.IconButton(
+                    icon: const material.Icon(material.Icons.close),
+                    onPressed: () => material.Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            const material.SizedBox(height: 8),
+            Text('${streams.length} stream${streams.length != 1 ? 's' : ''} available').muted(),
+            const material.SizedBox(height: 24),
+            
+            // Stream list
+            material.Flexible(
+              child: streams.isEmpty
+                  ? material.Center(
+                      child: material.Column(
+                        mainAxisSize: material.MainAxisSize.min,
+                        children: [
+                          material.Icon(
+                            material.Icons.video_library_outlined,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.mutedForeground,
+                          ),
+                          const material.SizedBox(height: 16),
+                          const Text('No streams available').muted(),
+                        ],
+                      ),
+                    )
+                  : material.ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: streams.length,
+                      itemBuilder: (context, index) {
+                        final stream = streams[index];
+                        return _StreamItem(
+                          stream: stream,
+                          displayName: _getStreamDisplayName(stream),
+                          onTap: () => material.Navigator.of(context).pop(stream),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StreamItem extends StatefulWidget {
+  final StreamInfo stream;
+  final String displayName;
+  final VoidCallback onTap;
+
+  const _StreamItem({
+    required this.stream,
+    required this.displayName,
+    required this.onTap,
+  });
+
+  @override
+  State<_StreamItem> createState() => _StreamItemState();
+}
+
+class _StreamItemState extends State<_StreamItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Clickable(
+        onPressed: widget.onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? Theme.of(context).colorScheme.muted
+                : Theme.of(context).colorScheme.background,
+            border: Border.all(
+              color: _isHovered
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.border,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              // Play icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  Icons.play_arrow,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Stream info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.displayName).semiBold(),
+                    if (widget.stream.description != null &&
+                        widget.stream.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.stream.description!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ).muted().small(),
+                    ],
+                  ],
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Quality badge
+              if (widget.stream.quality != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.muted,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.border,
+                    ),
+                  ),
+                  child: Text(
+                    widget.stream.quality!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

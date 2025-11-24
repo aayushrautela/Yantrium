@@ -1,8 +1,7 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'dart:async';
 import '../models/catalog_item.dart';
-import '../logic/library_repository.dart';
-import '../../../core/database/app_database.dart';
+import '../../../core/services/tmdb_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
 import 'catalog_item_detail_screen.dart';
@@ -22,7 +21,7 @@ class SearchOverlay extends StatefulWidget {
 
 class _SearchOverlayState extends State<SearchOverlay> {
   late final TextEditingController _searchController;
-  late final LibraryRepository _libraryRepository;
+  late final TmdbService _tmdbService;
   List<CatalogItem> _results = [];
   bool _isSearching = false;
   bool _hasText = false;
@@ -32,7 +31,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery);
-    _libraryRepository = LibraryRepository(AppDatabase());
+    _tmdbService = TmdbService();
     _hasText = widget.initialQuery.isNotEmpty;
     
     if (widget.initialQuery.isNotEmpty) {
@@ -74,10 +73,45 @@ class _SearchOverlayState extends State<SearchOverlay> {
     });
 
     try {
-      final results = await _libraryRepository.searchItems(query);
+      // Search both movies and TV shows from TMDB API
+      final movieResults = await _tmdbService.searchMovies(query);
+      final tvResults = await _tmdbService.searchTv(query);
+      
+      // Combine and convert to CatalogItem
+      final allResults = <CatalogItem>[];
+      
+      for (final movieData in movieResults) {
+        try {
+          allResults.add(CatalogItem.fromJson(movieData));
+        } catch (e) {
+          // Skip invalid items
+          continue;
+        }
+      }
+      
+      for (final tvData in tvResults) {
+        try {
+          allResults.add(CatalogItem.fromJson(tvData));
+        } catch (e) {
+          // Skip invalid items
+          continue;
+        }
+      }
+      
+      // Sort by rating (highest first), then by name
+      allResults.sort((a, b) {
+        final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
+        final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
+        
+        if (ratingB != ratingA) {
+          return ratingB.compareTo(ratingA);
+        }
+        return a.name.compareTo(b.name);
+      });
+      
       if (mounted) {
         setState(() {
-          _results = results;
+          _results = allResults;
           _isSearching = false;
         });
       }

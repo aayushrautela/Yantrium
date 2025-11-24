@@ -1,9 +1,13 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:media_kit/media_kit.dart';
 import 'features/library/screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize media_kit
+  MediaKit.ensureInitialized();
   
   // Load environment variables
   try {
