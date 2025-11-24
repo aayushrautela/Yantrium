@@ -9,6 +9,9 @@ import '../../../core/database/app_database.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/constants/app_constants.dart';
 import 'catalog_item_detail_screen.dart';
+import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/tmdb_data_extractor.dart';
+import '../../../core/services/id_parser.dart';
 
 /// Screen displaying catalogs from all enabled addons in horizontal scrolling lists
 class CatalogGridScreen extends StatefulWidget {
@@ -643,10 +646,14 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
   late Animation<double> _slideAnimation;
   bool _isAnimating = false;
   bool _isForward = true; // true = right direction, false = left direction
+  late final TmdbService _tmdbService;
+  String? _maturityRating;
+  String? _numberOfSeasons;
 
   @override
   void initState() {
     super.initState();
+    _tmdbService = TmdbService();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -656,12 +663,63 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
       curve: Curves.easeInOut,
     );
     
+    // Load metadata for initial item
+    _loadMetadataForCurrentItem();
+    
     if (widget.items.length > 1) {
       _timer = Timer.periodic(const Duration(seconds: 15), (timer) {
         if (mounted && !_isAnimating) {
           _nextItem();
         }
       });
+    }
+  }
+  
+  Future<void> _loadMetadataForCurrentItem() async {
+    if (widget.items.isEmpty) return;
+    
+    final currentItem = widget.items[_currentIndex];
+    _maturityRating = null;
+    _numberOfSeasons = null;
+    
+    try {
+      final tmdbId = IdParser.extractTmdbId(currentItem.id);
+      int? finalTmdbId = tmdbId;
+      
+      if (finalTmdbId == null && IdParser.isImdbId(currentItem.id)) {
+        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(currentItem.id);
+      }
+      
+      if (finalTmdbId != null) {
+        Map<String, dynamic>? tmdbData;
+        if (currentItem.type == 'movie') {
+          tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+        } else if (currentItem.type == 'series') {
+          tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+        }
+        
+        if (tmdbData != null && mounted) {
+          final rating = TmdbDataExtractor.extractMaturityRating(tmdbData, currentItem.type);
+          
+          String? numSeasons;
+          if (currentItem.type == 'series') {
+            final additionalMetadata = TmdbDataExtractor.extractAdditionalMetadata(tmdbData, currentItem.type);
+            final seasons = additionalMetadata['numberOfSeasons'] as int?;
+            if (seasons != null && seasons > 0) {
+              numSeasons = '$seasons Season${seasons > 1 ? 's' : ''}';
+            }
+          }
+          
+          if (mounted) {
+            setState(() {
+              _maturityRating = rating;
+              _numberOfSeasons = numSeasons;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore errors, just don't show rating/seasons
     }
   }
 
@@ -707,6 +765,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
       _isAnimating = true;
       _isForward = isForward;
     });
+    
+    // Load metadata for new item
+    _loadMetadataForCurrentItem();
     
     _animationController.forward(from: 0.0).then((_) {
       if (mounted) {
@@ -1069,7 +1130,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                       // Match percentage
                       if (currentItem.imdbRating != null)
                         Text(
-                          '${(double.tryParse(currentItem.imdbRating!) ?? 0 * 10).toInt()}% Match',
+                          '${((double.tryParse(currentItem.imdbRating!) ?? 0) * 10).toInt()}% Match',
                           style: TextStyle(
                             color: Colors.green[400],
                             fontWeight: FontWeight.w600,
@@ -1085,27 +1146,28 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                         ),
                       
                       // Rating badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.mutedForeground,
+                      if (_maturityRating != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
                           ),
-                          borderRadius: BorderRadius.circular(4),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.mutedForeground,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _maturityRating!,
+                            style: const TextStyle(fontSize: 14),
+                          ),
                         ),
-                        child: const Text(
-                          'TV-14',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                      ),
                       
                       // Seasons (for series)
-                      if (currentItem.type == 'series' && currentItem.releaseInfo != null)
+                      if (currentItem.type == 'series' && _numberOfSeasons != null)
                         Text(
-                          '26 Seasons',
+                          _numberOfSeasons!,
                           style: const TextStyle(fontSize: 16),
                         ),
                       
