@@ -785,7 +785,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         const SizedBox(width: 32),
 
         // Episodes grid
-        Expanded(
+        Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -835,12 +835,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                   return GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 100),
+                    padding: const EdgeInsets.only(bottom: 40),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 16,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.55,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 1.6,
                     ),
                     itemCount: selectedSeason.episodes.length,
                     itemBuilder: (context, index) {
@@ -1127,113 +1127,117 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Episode image with duration overlay
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 180,
-                  child: AnimatedScale(
-                    scale: _isHovered ? 1.05 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: imageUrl != null
-                        ? Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: 180,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
+      child: ClipRect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Episode image with duration overlay
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 180,
+                    child: AnimatedScale(
+                      scale: _isHovered ? 1.05 : 1.0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: imageUrl != null
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
                               width: double.infinity,
-                              height: 200,
+                              height: 180,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                width: double.infinity,
+                                height: 180,
+                                color: Theme.of(context).colorScheme.muted,
+                                child: const Icon(Icons.image_not_supported),
+                              ),
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  width: double.infinity,
+                                  height: 180,
+                                  color: Theme.of(context).colorScheme.muted,
+                                  child: const Center(
+                                      child: CircularProgressIndicator()),
+                                );
+                              },
+                            )
+                          : Container(
+                              width: double.infinity,
+                              height: 180,
                               color: Theme.of(context).colorScheme.muted,
                               child: const Icon(Icons.image_not_supported),
                             ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                width: double.infinity,
-                                height: 200,
-                                color: Theme.of(context).colorScheme.muted,
-                                child: const Center(
-                                    child: CircularProgressIndicator()),
-                              );
-                            },
-                          )
-                        : Container(
-                            width: double.infinity,
-                            height: 200,
-                            color: Theme.of(context).colorScheme.muted,
-                            child: const Icon(Icons.image_not_supported),
-                          ),
+                    ),
                   ),
-                ),
-                // Duration overlay
-                if (widget.episode.runtime != null)
-                  Positioned(
-                    bottom: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '${widget.episode.runtime}m',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                  // Duration overlay
+                  if (widget.episode.runtime != null)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${widget.episode.runtime}m',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          // Episode title
-          Text(
-            '${widget.episode.episodeNumber}. ${widget.episode.name}',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          const SizedBox(height: 6),
-
-          // Episode description
-          if (widget.episode.overview != null &&
-              widget.episode.overview!.isNotEmpty)
+            // Episode title
             Flexible(
               child: Text(
-                widget.episode.overview!,
-                style: TextStyle(
-                  fontSize: 14,
-                  color:
-                      Theme.of(context).colorScheme.foreground.withOpacity(0.7),
-                  height: 1.4,
+                '${widget.episode.episodeNumber}. ${widget.episode.name}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-                maxLines: 3,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-        ],
+
+            const SizedBox(height: 6),
+
+            // Episode description
+            if (widget.episode.overview != null &&
+                widget.episode.overview!.isNotEmpty)
+              Flexible(
+                child: Text(
+                  widget.episode.overview!,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color:
+                        Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
