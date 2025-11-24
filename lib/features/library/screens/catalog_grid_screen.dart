@@ -12,7 +12,9 @@ import 'catalog_item_detail_screen.dart';
 
 /// Screen displaying catalogs from all enabled addons in horizontal scrolling lists
 class CatalogGridScreen extends StatefulWidget {
-  const CatalogGridScreen({super.key});
+  final TextEditingController? searchController;
+
+  const CatalogGridScreen({super.key, this.searchController});
 
   @override
   State<CatalogGridScreen> createState() => _CatalogGridScreenState();
@@ -25,13 +27,105 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   bool _isLoading = true;
   String? _error;
   List<CatalogItem> _heroItems = [];
+  
+  // Search state
+  late final TextEditingController _searchController;
+  List<CatalogItem> _searchResults = [];
+  bool _isSearching = false;
+  String _selectedFilter = 'All';
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
     _database = AppDatabase();
     _libraryRepository = LibraryRepository(_database);
+    _searchController = widget.searchController ?? TextEditingController();
     _loadCatalogs();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _performSearch(_searchController.text);
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (!mounted) return;
+    
+    if (query.trim().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isSearching = true;
+      });
+    }
+
+    try {
+      final results = await _libraryRepository.searchItems(query);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+    }
+  }
+
+  List<CatalogItem> _getFilteredResults() {
+    List<CatalogItem> filtered;
+    
+    if (_selectedFilter == 'All') {
+      filtered = _searchResults;
+    } else if (_selectedFilter == 'TV Series') {
+      filtered = _searchResults.where((item) => item.type == 'series').toList();
+    } else if (_selectedFilter == 'Movies') {
+      filtered = _searchResults.where((item) => item.type == 'movie').toList();
+    } else {
+      // Genre filter
+      filtered = _searchResults.where((item) => 
+        item.genres?.any((genre) => genre.toLowerCase() == _selectedFilter.toLowerCase()) ?? false
+      ).toList();
+    }
+    
+    // Sort: items with posters first, items without posters at the end
+    filtered.sort((a, b) {
+      final aHasPoster = a.poster != null && a.poster!.isNotEmpty;
+      final bHasPoster = b.poster != null && b.poster!.isNotEmpty;
+      
+      if (aHasPoster && !bHasPoster) return -1;
+      if (!aHasPoster && bHasPoster) return 1;
+      return 0; // Keep original order for items in the same group
+    });
+    
+    return filtered;
+  }
+
+  List<String> _getAvailableGenres() {
+    final genres = <String>{};
+    for (final item in _searchResults) {
+      if (item.genres != null) {
+        genres.addAll(item.genres!);
+      }
+    }
+    return genres.toList()..sort();
   }
 
   Future<void> _loadCatalogs() async {
@@ -117,6 +211,11 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
       );
     }
 
+    // Show search results if searching
+    if (_searchController.text.trim().isNotEmpty) {
+      return _buildSearchResults();
+    }
+
     return RefreshTrigger(
       onRefresh: _loadCatalogs,
       child: CustomScrollView(
@@ -144,10 +243,384 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     );
   }
 
+  Widget _buildSearchResults() {
+    final filteredResults = _getFilteredResults();
+    final availableGenres = _getAvailableGenres();
+
+    return Column(
+      children: [
+        // Filters
+        Padding(
+          padding: AppConstants.horizontalPadding.copyWith(
+            top: 24,
+            bottom: 16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('FILTERS:').h4(),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'All',
+                    onTap: () => setState(() => _selectedFilter = 'All'),
+                  ),
+                  _FilterChip(
+                    label: 'TV Series',
+                    isSelected: _selectedFilter == 'TV Series',
+                    onTap: () => setState(() => _selectedFilter = 'TV Series'),
+                  ),
+                  _FilterChip(
+                    label: 'Movies',
+                    isSelected: _selectedFilter == 'Movies',
+                    onTap: () => setState(() => _selectedFilter = 'Movies'),
+                  ),
+                  ...availableGenres.take(10).map((genre) => _FilterChip(
+                    label: genre,
+                    isSelected: _selectedFilter == genre,
+                    onTap: () => setState(() => _selectedFilter = genre),
+                  )),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Results
+        Expanded(
+          child: _isSearching
+              ? const Center(child: CircularProgressIndicator())
+              : filteredResults.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 64,
+                            color: Theme.of(context).colorScheme.mutedForeground,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No results found',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.mutedForeground,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Padding(
+                      padding: AppConstants.horizontalPadding.copyWith(
+                        bottom: 40,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.local_fire_department, size: 24),
+                              const SizedBox(width: 8),
+                              const Text('Trending Now').h3(),
+                              const Spacer(),
+                              Text(
+                                '${filteredResults.length} TITLES',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          Expanded(
+                            child: _buildSearchGrid(filteredResults),
+                          ),
+                        ],
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchGrid(List<CatalogItem> items) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        
+        // Calculate card width to match catalog cards (240px) but scale responsively
+        // Target: ~240px per card with spacing
+        final targetCardWidth = 240.0;
+        final spacing = 16.0;
+        final minCardWidth = 180.0; // Minimum card width
+        final maxCardWidth = 280.0; // Maximum card width
+        
+        // Calculate how many cards fit with target width
+        int crossAxisCount = (availableWidth / (targetCardWidth + spacing)).floor();
+        crossAxisCount = crossAxisCount.clamp(3, 8); // Between 3 and 8 columns
+        
+        // Calculate actual card width based on available space
+        final actualCardWidth = ((availableWidth - (crossAxisCount - 1) * spacing) / crossAxisCount).clamp(minCardWidth, maxCardWidth);
+        
+        // Calculate aspect ratio: width / (image height + spacing + text height)
+        // Image height = cardWidth * 1.5 (2:3 ratio), text ~42px, spacing 12px
+        final imageHeight = actualCardWidth * 1.5;
+        final totalHeight = imageHeight + 12 + 42; // image + spacing + text
+        final aspectRatio = actualCardWidth / totalHeight;
+
+        return GridView.builder(
+          padding: const EdgeInsets.only(bottom: 100), // Increased bottom padding to fix overflow
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: 32,
+            childAspectRatio: aspectRatio,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _SearchResultCard(item: item, cardWidth: actualCardWidth);
+          },
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    // Only dispose if we created it (not passed from parent)
+    if (widget.searchController == null) {
+      _searchController.dispose();
+    }
     _database.close();
     super.dispose();
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Clickable(
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.muted,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primaryForeground
+                : Theme.of(context).colorScheme.foreground,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResultCard extends StatefulWidget {
+  final CatalogItem item;
+  final double cardWidth;
+
+  const _SearchResultCard({required this.item, required this.cardWidth});
+
+  @override
+  State<_SearchResultCard> createState() => _SearchResultCardState();
+}
+
+class _SearchResultCardState extends State<_SearchResultCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Clickable(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => CatalogItemDetailScreen(
+                item: widget.item,
+              ),
+            ),
+          );
+        },
+        child: SizedBox(
+          width: widget.cardWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Image with rounded corners, no frame, with zoom animation
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: widget.cardWidth,
+                  height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHovered ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: widget.item.poster != null
+                        ? Image.network(
+                            widget.item.poster!,
+                            fit: BoxFit.cover,
+                            width: widget.cardWidth,
+                            height: widget.cardWidth * 1.5,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              width: widget.cardWidth,
+                              height: widget.cardWidth * 1.5,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.muted,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    widget.item.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: widget.cardWidth,
+                                height: widget.cardWidth * 1.5,
+                                color: Theme.of(context).colorScheme.muted,
+                                child: const Center(
+                                    child: CircularProgressIndicator()),
+                              );
+                            },
+                          )
+                        : Container(
+                            width: widget.cardWidth,
+                            height: widget.cardWidth * 1.5,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.muted,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  widget.item.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ),
+                      // Rating overlay in bottom right corner
+                      if (widget.item.imdbRating != null)
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.background,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.border,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Text below the image (centered)
+              const SizedBox(height: 12),
+              SizedBox(
+                width: widget.cardWidth,
+                child: Text(
+                  widget.item.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(height: 1.3),
+                ).semiBold(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -760,7 +1233,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
 
   void _scrollLeft() {
     _scrollController.animateTo(
-      _scrollController.offset - 400,
+      _scrollController.offset - 480, // 240px card + 24px spacing = ~264px, scroll 2 cards
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
@@ -768,7 +1241,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
 
   void _scrollRight() {
     _scrollController.animateTo(
-      _scrollController.offset + 400,
+      _scrollController.offset + 480, // 240px card + 24px spacing = ~264px, scroll 2 cards
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
@@ -790,7 +1263,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
           ),
         ),
         SizedBox(
-          height: 360,
+          height: 440, // Increased to accommodate 360px image + text
           child: Stack(
             children: [
               Padding(
@@ -810,10 +1283,10 @@ class _CatalogSectionState extends State<_CatalogSection> {
                   },
                 ),
               ),
-              // Left button - centered relative to image (300px / 2 = 150px from top)
+              // Left button - centered relative to image (360px / 2 = 180px from top)
               Positioned(
                 left: AppConstants.horizontalMargin - 40,
-                top: 150 - 20, // Center of 300px image minus half button height
+                top: 180 - 20, // Center of 360px image minus half button height
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: Clickable(
@@ -839,7 +1312,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
               // Right button - centered relative to image
               Positioned(
                 right: AppConstants.horizontalMargin - 40,
-                top: 150 - 20, // Center of 300px image minus half button height
+                top: 180 - 20, // Center of 360px image minus half button height
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: Clickable(
@@ -899,7 +1372,7 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
           );
         },
         child: SizedBox(
-          width: 200,
+          width: 240,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -908,40 +1381,121 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
-                  width: 200,
-                  height: 300,
-                  child: AnimatedScale(
-                    scale: _isHovered ? 1.1 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: widget.item.poster != null
+                  width: 240,
+                  height: 360,
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHovered ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: widget.item.poster != null
                         ? Image.network(
                             widget.item.poster!,
                             fit: BoxFit.cover,
-                          width: 200,
-                          height: 300,
+                          width: 240,
+                          height: 360,
                           errorBuilder: (context, error, stackTrace) => Container(
-                            width: 200,
-                            height: 300,
-                            color: Theme.of(context).colorScheme.muted,
-                            child: const Icon(Icons.image_not_supported),
+                            width: 240,
+                            height: 360,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.muted,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  widget.item.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return Container(
-                              width: 200,
-                              height: 300,
+                              width: 240,
+                              height: 360,
                               color: Theme.of(context).colorScheme.muted,
                               child: const Center(child: CircularProgressIndicator()),
                             );
                           },
                         )
                       : Container(
-                          width: 200,
-                          height: 300,
-                          color: Theme.of(context).colorScheme.muted,
-                          child: const Icon(Icons.image_not_supported),
+                          width: 240,
+                          height: 360,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.muted,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Text(
+                                widget.item.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.foreground,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
+                      ),
+                      // Rating overlay in bottom right corner
+                      if (widget.item.imdbRating != null)
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.background,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.border,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -949,7 +1503,7 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
               // Text below the image (centered)
               const SizedBox(height: 12),
               SizedBox(
-                width: 200,
+                width: 240,
                 child: Text(
                   widget.item.name,
                   maxLines: 2,

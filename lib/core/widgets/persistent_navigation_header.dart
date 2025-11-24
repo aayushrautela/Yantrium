@@ -1,5 +1,5 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
-import '../../core/constants/app_constants.dart';
+import '../constants/app_constants.dart';
 
 /// Persistent navigation header used across all screens
 class PersistentNavigationHeader extends StatelessWidget {
@@ -7,6 +7,7 @@ class PersistentNavigationHeader extends StatelessWidget {
   final ValueChanged<int>? onNavigate;
   final bool showBackButton;
   final VoidCallback? onBack;
+  final TextEditingController? searchController;
 
   const PersistentNavigationHeader({
     super.key,
@@ -14,6 +15,7 @@ class PersistentNavigationHeader extends StatelessWidget {
     this.onNavigate,
     this.showBackButton = false,
     this.onBack,
+    this.searchController,
   });
 
   @override
@@ -74,9 +76,15 @@ class PersistentNavigationHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                    placeholder: const Text('Search titles, people, genres'),
-                  ),
+                  child: searchController != null
+                      ? TextField(
+                          controller: searchController,
+                          placeholder: const Text('Titles, people, genres'),
+                        )
+                      : TextField(
+                          enabled: false,
+                          placeholder: const Text('Titles, people, genres'),
+                        ),
                 ),
               ],
             ),

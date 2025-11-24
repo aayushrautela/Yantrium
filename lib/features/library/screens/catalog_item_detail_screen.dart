@@ -8,6 +8,8 @@ import '../logic/library_repository.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
 import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/id_parser.dart';
+import '../../../core/services/tmdb_data_extractor.dart';
 
 /// Detail screen for a catalog item (movie or series)
 class CatalogItemDetailScreen extends StatefulWidget {
@@ -36,6 +38,9 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   List<Season> _seasons = [];
   int _selectedSeasonNumber = 1;
   bool _isLoadingEpisodes = false;
+  Map<String, dynamic>? _tmdbMetadata; // Store raw TMDB metadata
+  String? _maturityRating; // Store maturity rating for hero card
+  String? _numberOfSeasons; // Store number of seasons for series
 
   @override
   void initState() {
@@ -48,7 +53,36 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
 
   Future<void> _enrichItem() async {
     try {
-      final enriched = await _libraryRepository.enrichItemForHero(widget.item);
+      // Fetch TMDB metadata first and store it for reuse
+      final tmdbId = IdParser.extractTmdbId(widget.item.id);
+      int? finalTmdbId = tmdbId;
+      
+      if (finalTmdbId == null && IdParser.isImdbId(widget.item.id)) {
+        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(widget.item.id);
+      }
+      
+      Map<String, dynamic>? tmdbData;
+      if (finalTmdbId != null) {
+        if (widget.item.type == 'movie') {
+          tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+        } else if (widget.item.type == 'series') {
+          tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+        }
+      }
+      
+      // Store raw TMDB metadata for reuse in _loadCastAndCrew
+      if (tmdbData != null && mounted) {
+        setState(() {
+          _tmdbMetadata = tmdbData;
+        });
+      }
+      
+      // Use cached data for enrichment
+      final enriched = await _libraryRepository.enrichItemForHero(
+        widget.item,
+        cachedTmdbData: tmdbData,
+      );
+      
       if (mounted && enriched != null) {
         // Preserve original logo if it exists, otherwise use enriched logo
         final finalItem = enriched.copyWith(
@@ -80,7 +114,67 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
 
     try {
       final item = _enrichedItem ?? widget.item;
-      final castCrewData = await _libraryRepository.getCastAndCrewForItem(item);
+      
+      // Reuse stored TMDB metadata if available, otherwise fetch it
+      Map<String, dynamic>? tmdbData = _tmdbMetadata;
+      
+      if (tmdbData == null) {
+        final tmdbId = IdParser.extractTmdbId(item.id);
+        int? finalTmdbId = tmdbId;
+        
+        if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
+          finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+        }
+        
+        // Fetch full TMDB metadata to get budget, release_date, runtime, spoken_languages
+        if (finalTmdbId != null) {
+          if (item.type == 'movie') {
+            tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+          } else if (item.type == 'series') {
+            tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+          }
+        }
+      }
+      
+      // Store raw TMDB metadata for details tab
+      if (tmdbData != null && mounted) {
+        // Use centralized extractor for maturity rating
+        final rating = TmdbDataExtractor.extractMaturityRating(tmdbData, item.type);
+        
+        // Extract number of seasons for series
+        String? numSeasons;
+        if (item.type == 'series') {
+          final additionalMetadata = TmdbDataExtractor.extractAdditionalMetadata(tmdbData, item.type);
+          final seasons = additionalMetadata['numberOfSeasons'] as int?;
+          if (seasons != null && seasons > 0) {
+            numSeasons = '$seasons Season${seasons > 1 ? 's' : ''}';
+          }
+        }
+        
+        setState(() {
+          _tmdbMetadata = tmdbData;
+          _maturityRating = rating;
+          _numberOfSeasons = numSeasons;
+        });
+      }
+      
+      // Use centralized extractor for cast and crew
+      if (tmdbData != null && mounted) {
+        final castAndCrew = TmdbDataExtractor.extractCastAndCrew(tmdbData);
+        
+        setState(() {
+          _cast = castAndCrew['cast']!;
+          _crew = castAndCrew['crew']!;
+          _isLoadingCastCrew = false;
+        });
+        return;
+      }
+      
+      // Fallback to repository method if tmdbData is null
+      final castCrewData = await _libraryRepository.getCastAndCrewForItem(
+        item,
+        cachedTmdbData: tmdbData,
+      );
 
       if (castCrewData != null && mounted) {
         final parsedCast = (castCrewData['cast'] as List<dynamic>? ?? [])
@@ -281,29 +375,14 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                 ),
 
                               // Rating badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.muted,
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.border,
-                                  ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'TV-14',
-                                  style: TextStyle(fontSize: 14),
-                                ),
-                              ),
+                              if (_maturityRating != null)
+                                _buildMaturityRating(_maturityRating, showDescription: false),
 
                               // Seasons (for series)
-                              if (item.type == 'series')
-                                const Text(
-                                  '14 Seasons',
-                                  style: TextStyle(fontSize: 16),
+                              if (item.type == 'series' && _numberOfSeasons != null)
+                                Text(
+                                  _numberOfSeasons!,
+                                  style: const TextStyle(fontSize: 16),
                                 ),
 
                               // HD badge
@@ -454,12 +533,322 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     }
 
     // DETAILS tab
-    return SizedBox(
-      width: 600,
-      child: const Text(
-        'Content for DETAILS',
-        style: TextStyle(color: Colors.white),
+    return _buildDetailsContent(item);
+  }
+
+  Widget _buildDetailsContent(CatalogItem item) {
+    final itemToUse = _enrichedItem ?? item;
+    
+    // Extract data from TMDB metadata
+    String? releaseYear;
+    String? language;
+    String? budget;
+    String? runtimeFormatted;
+    String? maturityRating;
+    String? maturityRatingDescription;
+    
+    if (_tmdbMetadata != null) {
+      // Extract release year from release_date
+      final releaseDate = _tmdbMetadata!['release_date'] as String? ?? 
+                         _tmdbMetadata!['first_air_date'] as String?;
+      if (releaseDate != null && releaseDate.isNotEmpty) {
+        final yearMatch = RegExp(r'^\d{4}').firstMatch(releaseDate);
+        if (yearMatch != null) {
+          releaseYear = yearMatch.group(0);
+        }
+      }
+      
+      // Extract language
+      final spokenLanguages = _tmdbMetadata!['spoken_languages'] as List<dynamic>?;
+      final originalLanguageData = _tmdbMetadata!['original_language'] as String?;
+      final languages = <String>{};
+      
+      String? originalLanguageName;
+      
+      // Find the full name of the original language from spoken_languages
+      if (originalLanguageData != null && spokenLanguages != null) {
+        final originalLangInfo = spokenLanguages.firstWhere(
+          (lang) => (lang['iso_639_1'] as String?) == originalLanguageData,
+          orElse: () => null,
+        ) as Map<String, dynamic>?;
+        if (originalLangInfo != null) {
+          originalLanguageName = originalLangInfo['english_name'] as String?;
+        }
+      }
+      
+      // Fallback to original language code if full name not found
+      if (originalLanguageName == null && originalLanguageData != null && originalLanguageData.isNotEmpty) {
+        originalLanguageName = originalLanguageData.toUpperCase();
+      }
+      
+      // Add original language if available
+      if (originalLanguageName != null && originalLanguageName.isNotEmpty) {
+        languages.add(originalLanguageName);
+      }
+      
+      // Add English if available and different from original
+      if (spokenLanguages != null) {
+        final english = spokenLanguages.firstWhere(
+          (lang) => (lang['english_name'] as String?)?.toLowerCase() == 'english',
+          orElse: () => null,
+        ) as Map<String, dynamic>?;
+        
+        if (english != null) {
+          final englishName = english['english_name'] as String?;
+          if (englishName != null && englishName.isNotEmpty && englishName.toLowerCase() != originalLanguageName?.toLowerCase()) {
+            languages.add(englishName);
+          }
+        }
+      }
+      
+      if (languages.isNotEmpty) {
+        language = languages.join(', ');
+      }
+      
+      // Extract and format budget
+      final budgetValue = _tmdbMetadata!['budget'] as int?;
+      if (budgetValue != null && budgetValue > 0) {
+        if (budgetValue >= 1000000) {
+          final millions = budgetValue / 1000000;
+          budget = '\$${millions.toStringAsFixed(millions.truncateToDouble() == millions ? 0 : 1)} million';
+        } else if (budgetValue >= 1000) {
+          final thousands = budgetValue / 1000;
+          budget = '\$${thousands.toStringAsFixed(thousands.truncateToDouble() == thousands ? 0 : 1)} thousand';
+        } else {
+          budget = '\$$budgetValue';
+        }
+      }
+      
+      // Extract and format runtime
+      final runtimeValue = _tmdbMetadata!['runtime'] as int?;
+      if (runtimeValue != null && runtimeValue > 0) {
+        runtimeFormatted = '$runtimeValue min';
+      }
+      
+      // Use stored maturity rating (already extracted in _loadCastAndCrew)
+      maturityRating = _maturityRating;
+    }
+    
+    // Fallback to releaseInfo if TMDB data not available
+    if (releaseYear == null && itemToUse.releaseInfo != null && itemToUse.releaseInfo!.isNotEmpty) {
+      final yearMatch = RegExp(r'\b(19|20)\d{2}\b').firstMatch(itemToUse.releaseInfo!);
+      if (yearMatch != null) {
+        releaseYear = yearMatch.group(0);
+      }
+    }
+    
+    // Fallback to runtime from CatalogItem if TMDB data not available
+    if (runtimeFormatted == null && itemToUse.runtime != null && itemToUse.runtime!.isNotEmpty) {
+      final runtimeInt = int.tryParse(itemToUse.runtime!);
+      if (runtimeInt != null) {
+        runtimeFormatted = '$runtimeInt min';
+      } else {
+        runtimeFormatted = itemToUse.runtime;
+      }
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.muted, // Same as TV-14/HD button
+        borderRadius: BorderRadius.circular(8),
       ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // First column: About (50% width)
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'About ${itemToUse.name}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (itemToUse.description != null && itemToUse.description!.isNotEmpty)
+                  Text(
+                    itemToUse.description!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.mutedForeground,
+                      height: 1.5,
+                    ),
+                  )
+                else
+                  Text(
+                    'No description available.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.mutedForeground,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 32),
+          // Second column: Metadata (25% width)
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_crew.isNotEmpty) ...[
+                  Builder(
+                    builder: (context) {
+                      final creators = _crew
+                          .where((c) => c.character?.toLowerCase() == 'creator' || 
+                                       c.character?.toLowerCase() == 'executive producer')
+                          .map((c) => c.name)
+                          .take(3)
+                          .toList();
+                      if (creators.isEmpty) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildMetadataRow(
+                            'CREATED BY',
+                            creators.join(', '),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+                if (_cast.isNotEmpty) ...[
+                  _buildMetadataRow(
+                    'CAST',
+                    _cast
+                        .take(6)
+                        .map((c) => c.name)
+                        .join(', '),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (releaseYear != null) ...[
+                  _buildMetadataRow('RELEASE YEAR', releaseYear),
+                  const SizedBox(height: 16),
+                ],
+                if (language != null && language.isNotEmpty) ...[
+                  _buildMetadataRow('LANGUAGE', language),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 32),
+          // Third column: Metadata (25% width)
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (itemToUse.genres != null && itemToUse.genres!.isNotEmpty) ...[
+                  _buildMetadataRow(
+                    'GENRES',
+                    itemToUse.genres!.join(', '),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (budget != null && budget.isNotEmpty) ...[
+                  _buildMetadataRow('BUDGET', budget),
+                  const SizedBox(height: 16),
+                ],
+                if (runtimeFormatted != null) ...[
+                  _buildMetadataRow('RUNTIME', runtimeFormatted),
+                  const SizedBox(height: 16),
+                ],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MATURITY RATING',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.mutedForeground,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildMaturityRating(_maturityRating),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetadataRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.mutedForeground,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.foreground,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMaturityRating(String? rating, {bool showDescription = true}) {
+    final hasRating = rating != null && rating.isNotEmpty && rating != 'N/A';
+    
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.background,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.border,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            rating ?? 'N/A',
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+        if (hasRating && showDescription) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Language, Suggestive Dialogue',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.mutedForeground,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -471,10 +860,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     });
 
     try {
-      final tmdbId = _tmdbService.extractTmdbId(item.id);
+      final tmdbId = IdParser.extractTmdbId(item.id);
       int? finalTmdbId = tmdbId;
 
-      if (finalTmdbId == null && item.id.startsWith('tt')) {
+      if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
         finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
       }
 
@@ -540,10 +929,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     });
 
     try {
-      final tmdbId = _tmdbService.extractTmdbId(item.id);
+      final tmdbId = IdParser.extractTmdbId(item.id);
       int? finalTmdbId = tmdbId;
 
-      if (finalTmdbId == null && item.id.startsWith('tt')) {
+      if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
         finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
       }
 
@@ -619,8 +1008,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: 16,
         mainAxisSpacing: 32,
-        childAspectRatio:
-            0.52, // Adjusted to give more vertical space for 2-line titles (200/385 ratio)
+        childAspectRatio: 0.545, // 240px width / ~440px height (360px image + ~80px text)
       ),
       itemCount: _similarItems.length,
       itemBuilder: (context, index) {
@@ -675,7 +1063,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: 12,
-        mainAxisSpacing: 32,
+        mainAxisSpacing: 16,
         childAspectRatio:
             0.55, // Adjusted to give more vertical space for cast cards
       ),
@@ -840,7 +1228,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 1.6,
+                      childAspectRatio: 1.2,
                     ),
                     itemCount: selectedSeason.episodes.length,
                     itemBuilder: (context, index) {
@@ -1033,7 +1421,7 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
           );
         },
         child: SizedBox(
-          width: 200,
+          width: 240,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -1043,30 +1431,51 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
-                  width: 200,
-                  height: 300,
-                  child: AnimatedScale(
-                    scale: _isHovered ? 1.1 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: widget.item.poster != null
+                  width: 240,
+                  height: 360,
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHovered ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: widget.item.poster != null
                         ? Image.network(
                             widget.item.poster!,
                             fit: BoxFit.cover,
-                            width: 200,
-                            height: 300,
+                            width: 240,
+                            height: 360,
                             errorBuilder: (context, error, stackTrace) =>
                                 Container(
-                              width: 200,
-                              height: 300,
-                              color: Theme.of(context).colorScheme.muted,
-                              child: const Icon(Icons.image_not_supported),
+                              width: 240,
+                              height: 360,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.muted,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    widget.item.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Container(
-                                width: 200,
-                                height: 300,
+                                width: 240,
+                                height: 360,
                                 color: Theme.of(context).colorScheme.muted,
                                 child: const Center(
                                     child: CircularProgressIndicator()),
@@ -1074,11 +1483,71 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
                             },
                           )
                         : Container(
-                            width: 200,
-                            height: 300,
-                            color: Theme.of(context).colorScheme.muted,
-                            child: const Icon(Icons.image_not_supported),
+                            width: 240,
+                            height: 360,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.muted,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  widget.item.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
+                      ),
+                      // Rating overlay in bottom right corner
+                      if (widget.item.imdbRating != null)
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.background,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.border,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -1087,7 +1556,7 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
               const SizedBox(height: 12),
               Flexible(
                 child: SizedBox(
-                  width: 200,
+                  width: 240,
                   child: Text(
                     widget.item.name,
                     maxLines: 2,
@@ -1127,116 +1596,185 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: ClipRect(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Episode image with duration overlay
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Stack(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 180,
-                    child: AnimatedScale(
-                      scale: _isHovered ? 1.05 : 1.0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: imageUrl != null
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: 180,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                width: double.infinity,
-                                height: 180,
-                                color: Theme.of(context).colorScheme.muted,
-                                child: const Icon(Icons.image_not_supported),
-                              ),
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Container(
-                                  width: double.infinity,
-                                  height: 180,
-                                  color: Theme.of(context).colorScheme.muted,
-                                  child: const Center(
-                                      child: CircularProgressIndicator()),
-                                );
-                              },
-                            )
-                          : Container(
-                              width: double.infinity,
-                              height: 180,
-                              color: Theme.of(context).colorScheme.muted,
-                              child: const Icon(Icons.image_not_supported),
-                            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          color: Theme.of(context).colorScheme.background,
+          child: ClipRect(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Episode image with duration overlay
+                Flexible(
+                  flex: 3,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      topRight: Radius.circular(8),
                     ),
-                  ),
-                  // Duration overlay
-                  if (widget.episode.runtime != null)
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${widget.episode.runtime}m',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                    child: Stack(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: AnimatedScale(
+                              scale: _isHovered ? 1.05 : 1.0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                              child: imageUrl != null
+                                  ? Image.network(
+                                      imageUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          Container(
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.muted,
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(8),
+                                            topRight: Radius.circular(8),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Text(
+                                              widget.episode.name,
+                                              textAlign: TextAlign.center,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: Theme.of(context).colorScheme.foreground,
+                                                height: 1.2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Container(
+                                          width: double.infinity,
+                                          color: Theme.of(context).colorScheme.muted,
+                                          child: const Center(
+                                              child: CircularProgressIndicator()),
+                                        );
+                                      },
+                                    )
+                                  : Container(
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.muted,
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(8),
+                                          topRight: Radius.circular(8),
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16.0),
+                                          child: Text(
+                                            widget.episode.name,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Theme.of(context).colorScheme.foreground,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
                           ),
                         ),
+                        // Duration overlay
+                        if (widget.episode.runtime != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${widget.episode.runtime}m',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Title and description with background
+                Flexible(
+                  flex: 2,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(15),
+                    color: Theme.of(context).colorScheme.muted,
+                    child: ClipRect(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          // Episode title
+                          Text(
+                            '${widget.episode.episodeNumber}. ${widget.episode.name}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          // Episode description
+                          if (widget.episode.overview != null &&
+                              widget.episode.overview!.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Flexible(
+                              child: Text(
+                                widget.episode.overview!,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .foreground
+                                      .withOpacity(0.7),
+                                  height: 1.4,
+                                ),
+                                maxLines: 5,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Episode title
-            Flexible(
-              child: Text(
-                '${widget.episode.episodeNumber}. ${widget.episode.name}',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-            const SizedBox(height: 6),
-
-            // Episode description
-            if (widget.episode.overview != null &&
-                widget.episode.overview!.isNotEmpty)
-              Flexible(
-                child: Text(
-                  widget.episode.overview!,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color:
-                        Theme.of(context).colorScheme.foreground.withOpacity(0.7),
-                    height: 1.4,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

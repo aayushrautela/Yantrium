@@ -1,12 +1,29 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import 'id_parser.dart';
+import 'tmdb_data_extractor.dart';
+
+/// Cached metadata entry with timestamp
+class _CachedMetadata {
+  final Map<String, dynamic> data;
+  final DateTime timestamp;
+  final Duration ttl;
+
+  _CachedMetadata(this.data, this.ttl) : timestamp = DateTime.now();
+
+  bool get isExpired => DateTime.now().difference(timestamp) > ttl;
+}
 
 /// Service for fetching metadata from The Movie Database (TMDB) API
 class TmdbService {
   late final Dio _dio;
   late final String _apiKey;
   late final String _imageBaseUrl;
+  
+  // Cache for TMDB metadata (5 minute TTL)
+  final Map<String, _CachedMetadata> _cache = {};
+  static const Duration _cacheTtl = Duration(minutes: 5);
 
   TmdbService() {
     _apiKey = dotenv.env['TMDB_API_KEY'] ?? '';
@@ -24,28 +41,6 @@ class TmdbService {
     ));
   }
 
-  /// Extract TMDB ID from content ID
-  /// Supports formats: "tmdb:123", "tt1234567" (IMDB), or numeric string
-  int? extractTmdbId(String contentId) {
-    // Handle tmdb:123 format
-    if (contentId.startsWith('tmdb:')) {
-      final id = contentId.substring(5);
-      return int.tryParse(id);
-    }
-    
-    // Handle numeric string (assume TMDB ID)
-    final numericId = int.tryParse(contentId);
-    if (numericId != null) {
-      return numericId;
-    }
-    
-    // Handle IMDB ID (tt1234567) - need to search TMDB
-    if (contentId.startsWith('tt')) {
-      return null; // Will need to search by IMDB ID
-    }
-    
-    return null;
-  }
 
   /// Search for content by IMDB ID and get TMDB ID
   Future<int?> getTmdbIdFromImdb(String imdbId) async {
@@ -74,12 +69,21 @@ class TmdbService {
     }
   }
 
-  /// Fetch movie metadata from TMDB
+  /// Fetch movie metadata from TMDB (with caching)
   Future<Map<String, dynamic>?> getMovieMetadata(int tmdbId) async {
+    final cacheKey = 'movie_$tmdbId';
+    
+    // Check cache first
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      debugPrint('[CACHE] Using cached movie metadata for TMDB ID: $tmdbId');
+      return Map<String, dynamic>.from(cached.data);
+    }
+    
     try {
       debugPrint('[LOGO] Fetching movie metadata for TMDB ID: $tmdbId');
       final response = await _dio.get('/movie/$tmdbId', queryParameters: {
-        'append_to_response': 'videos,credits,images',
+        'append_to_response': 'videos,credits,images,release_dates',
       });
       final data = response.data as Map<String, dynamic>;
       debugPrint('[LOGO] Movie metadata response keys: ${data.keys.toList()}');
@@ -89,6 +93,10 @@ class TmdbService {
         debugPrint('[LOGO] Images object type: ${images.runtimeType}');
         debugPrint('[LOGO] Images keys: ${images?.keys.toList()}');
       }
+      
+      // Store in cache
+      _cache[cacheKey] = _CachedMetadata(data, _cacheTtl);
+      
       return data;
     } catch (e) {
       debugPrint('[LOGO] Error fetching movie metadata: $e');
@@ -96,12 +104,21 @@ class TmdbService {
     }
   }
 
-  /// Fetch TV series metadata from TMDB
+  /// Fetch TV series metadata from TMDB (with caching)
   Future<Map<String, dynamic>?> getTvMetadata(int tmdbId) async {
+    final cacheKey = 'tv_$tmdbId';
+    
+    // Check cache first
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      debugPrint('[CACHE] Using cached TV metadata for TMDB ID: $tmdbId');
+      return Map<String, dynamic>.from(cached.data);
+    }
+    
     try {
       debugPrint('[LOGO] Fetching TV metadata for TMDB ID: $tmdbId');
       final response = await _dio.get('/tv/$tmdbId', queryParameters: {
-        'append_to_response': 'videos,credits,images',
+        'append_to_response': 'videos,credits,images,content_ratings',
       });
       final data = response.data as Map<String, dynamic>;
       debugPrint('[LOGO] TV metadata response keys: ${data.keys.toList()}');
@@ -111,11 +128,25 @@ class TmdbService {
         debugPrint('[LOGO] Images object type: ${images.runtimeType}');
         debugPrint('[LOGO] Images keys: ${images?.keys.toList()}');
       }
+      
+      // Store in cache
+      _cache[cacheKey] = _CachedMetadata(data, _cacheTtl);
+      
       return data;
     } catch (e) {
       debugPrint('[LOGO] Error fetching TV metadata: $e');
       return null;
     }
+  }
+  
+  /// Clear the metadata cache
+  void clearCache() {
+    _cache.clear();
+  }
+  
+  /// Get current cache size
+  int getCacheSize() {
+    return _cache.length;
   }
 
   /// Get full image URL from TMDB path
@@ -131,12 +162,14 @@ class TmdbService {
     String originalId,
   ) {
     try {
-      final credits = tmdbData['credits'] as Map<String, dynamic>?;
-      final cast = credits?['cast'] as List<dynamic>?;
-      final crew = credits?['crew'] as List<dynamic>?;
+      // Use centralized extractor for cast and crew
+      final castAndCrew = TmdbDataExtractor.extractCastAndCrew(tmdbData);
+      final cast = castAndCrew['cast']!;
+      final crew = castAndCrew['crew']!;
+      
       final directors = crew
-          ?.where((person) => person['job'] == 'Director')
-          .map((person) => person['name'] as String)
+          .where((person) => person.character?.toLowerCase() == 'director')
+          .map((person) => person.name)
           .toList();
       
       final genres = (tmdbData['genres'] as List<dynamic>?)
@@ -216,18 +249,22 @@ class TmdbService {
       final logoUrl = getImageUrl(logoPath, size: 'w500');
       debugPrint('[LOGO] Final logo URL: $logoUrl');
 
-      // Extract full cast and crew data with profile images
-      final fullCast = cast?.map((c) => {
-            'name': c['name'],
-            'character': c['character'],
-            'profile_path': c['profile_path'],
-            'order': c['order'],
+      // Use centralized extractor for additional metadata
+      final additionalMetadata = TmdbDataExtractor.extractAdditionalMetadata(tmdbData, 'movie');
+      final runtime = additionalMetadata['runtime'] as int?;
+
+      // Convert cast/crew to JSON format for CatalogItem
+      final fullCast = cast.map((c) => {
+            'name': c.name,
+            'character': c.character,
+            'profile_path': c.profileImageUrl,
+            'order': c.order,
           }).toList();
       
-      final fullCrew = crew?.map((c) => {
-            'name': c['name'],
-            'job': c['job'],
-            'profile_path': c['profile_path'],
+      final fullCrew = crew.map((c) => {
+            'name': c.name,
+            'job': c.character,
+            'profile_path': c.profileImageUrl,
           }).toList();
 
       return {
@@ -241,9 +278,9 @@ class TmdbService {
         'releaseInfo': tmdbData['release_date'] as String?,
         'genres': genres,
         'imdbRating': tmdbData['vote_average']?.toString(),
-        'runtime': tmdbData['runtime']?.toString(),
+        'runtime': runtime?.toString(),
         'director': directors,
-        'cast': cast?.take(10).map((c) => c['name'] as String).toList(),
+        'cast': cast.take(10).map((c) => c.name).toList(),
         'castFull': fullCast,
         'crewFull': fullCrew,
         'videos': trailers,
@@ -259,12 +296,14 @@ class TmdbService {
     String originalId,
   ) {
     try {
-      final credits = tmdbData['credits'] as Map<String, dynamic>?;
-      final cast = credits?['cast'] as List<dynamic>?;
-      final crew = credits?['crew'] as List<dynamic>?;
+      // Use centralized extractor for cast and crew
+      final castAndCrew = TmdbDataExtractor.extractCastAndCrew(tmdbData);
+      final cast = castAndCrew['cast']!;
+      final crew = castAndCrew['crew']!;
+      
       final creators = crew
-          ?.where((person) => person['job'] == 'Creator')
-          .map((person) => person['name'] as String)
+          .where((person) => person.character?.toLowerCase() == 'creator')
+          .map((person) => person.name)
           .toList();
       
       final genres = (tmdbData['genres'] as List<dynamic>?)
@@ -353,29 +392,22 @@ class TmdbService {
       final logoUrl = getImageUrl(logoPath, size: 'w500');
       debugPrint('[LOGO] Final logo URL: $logoUrl');
 
-      // Safely extract runtime
-      String? runtime;
-      try {
-        final episodeRunTime = tmdbData['episode_run_time'] as List<dynamic>?;
-        if (episodeRunTime != null && episodeRunTime.isNotEmpty) {
-          runtime = episodeRunTime[0]?.toString();
-        }
-      } catch (e) {
-        // Ignore runtime extraction errors
-      }
+      // Use centralized extractor for additional metadata
+      final additionalMetadata = TmdbDataExtractor.extractAdditionalMetadata(tmdbData, 'series');
+      final runtime = additionalMetadata['runtime'] as int?;
 
-      // Extract full cast and crew data with profile images
-      final fullCast = cast?.map((c) => {
-            'name': c['name'],
-            'character': c['character'],
-            'profile_path': c['profile_path'],
-            'order': c['order'],
+      // Convert cast/crew to JSON format for CatalogItem
+      final fullCast = cast.map((c) => {
+            'name': c.name,
+            'character': c.character,
+            'profile_path': c.profileImageUrl,
+            'order': c.order,
           }).toList();
       
-      final fullCrew = crew?.map((c) => {
-            'name': c['name'],
-            'job': c['job'],
-            'profile_path': c['profile_path'],
+      final fullCrew = crew.map((c) => {
+            'name': c.name,
+            'job': c.character,
+            'profile_path': c.profileImageUrl,
           }).toList();
 
       return {
@@ -389,9 +421,9 @@ class TmdbService {
         'releaseInfo': releaseInfo,
         'genres': genres,
         'imdbRating': tmdbData['vote_average']?.toString(),
-        'runtime': runtime,
+        'runtime': runtime?.toString(),
         'director': creators,
-        'cast': cast?.take(10).map((c) => c['name'] as String).toList(),
+        'cast': cast.take(10).map((c) => c.name).toList(),
         'castFull': fullCast,
         'crewFull': fullCrew,
         'videos': trailers,
@@ -403,32 +435,41 @@ class TmdbService {
 
   /// Enrich CatalogItem with TMDB metadata
   /// Returns enriched CatalogItem data or null if TMDB fetch fails
+  /// If cachedTmdbData is provided, uses it instead of fetching (avoids duplicate API calls)
   Future<Map<String, dynamic>?> enrichCatalogItem(
     String contentId,
-    String type,
-  ) async {
-    // Try to extract TMDB ID
-    int? tmdbId = extractTmdbId(contentId);
+    String type, {
+    Map<String, dynamic>? cachedTmdbData,
+  }) async {
+    // Use cached data if provided
+    Map<String, dynamic>? tmdbData = cachedTmdbData;
     
-    // If IMDB ID, search for TMDB ID
-    if (tmdbId == null && contentId.startsWith('tt')) {
-      tmdbId = await getTmdbIdFromImdb(contentId);
-    }
-    
-    if (tmdbId == null) {
-      return null; // Can't find TMDB ID
+    // Only fetch if no cached data provided
+    if (tmdbData == null) {
+      // Try to extract TMDB ID
+      int? tmdbId = IdParser.extractTmdbId(contentId);
+      
+      // If IMDB ID, search for TMDB ID
+      if (tmdbId == null && contentId.startsWith('tt')) {
+        tmdbId = await getTmdbIdFromImdb(contentId);
+      }
+      
+      if (tmdbId == null) {
+        return null; // Can't find TMDB ID
+      }
+
+      // Fetch metadata based on type (will use cache if available)
+      if (type == 'movie') {
+        tmdbData = await getMovieMetadata(tmdbId);
+      } else if (type == 'series') {
+        tmdbData = await getTvMetadata(tmdbId);
+      }
     }
 
-    // Fetch metadata based on type
-    Map<String, dynamic>? tmdbData;
-    if (type == 'movie') {
-      tmdbData = await getMovieMetadata(tmdbId);
-      if (tmdbData != null) {
+    if (tmdbData != null) {
+      if (type == 'movie') {
         return convertMovieToCatalogItem(tmdbData, contentId);
-      }
-    } else if (type == 'series') {
-      tmdbData = await getTvMetadata(tmdbId);
-      if (tmdbData != null) {
+      } else if (type == 'series') {
         return convertTvToCatalogItem(tmdbData, contentId);
       }
     }
@@ -559,5 +600,74 @@ class TmdbService {
       return [];
     }
   }
-}
 
+  /// Search for movies using TMDB search API
+  Future<List<Map<String, dynamic>>> searchMovies(String query) async {
+    try {
+      final response = await _dio.get('/search/movie', queryParameters: {
+        'query': query,
+        'page': 1,
+      });
+      final data = response.data as Map<String, dynamic>;
+      final results = (data['results'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      // Sort by popularity (highest first)
+      results.sort((a, b) => (b['popularity'] as num?)?.compareTo(a['popularity'] as num? ?? 0) ?? 0);
+
+      return results.map((item) {
+        final id = item['id']?.toString() ?? '';
+        final tmdbIdStr = 'tmdb:$id';
+
+        return {
+          'id': tmdbIdStr,
+          'type': 'movie',
+          'name': item['title'] as String? ?? '',
+          'poster': getImageUrl(item['poster_path'] as String?),
+          'background': getImageUrl(item['backdrop_path'] as String?, size: 'w1280'),
+          'description': item['overview'] as String?,
+          'releaseInfo': item['release_date'] as String?,
+          'imdbRating': item['vote_average']?.toString(),
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('Error searching movies: $e');
+      return [];
+    }
+  }
+
+  /// Search for TV shows using TMDB search API
+  Future<List<Map<String, dynamic>>> searchTv(String query) async {
+    try {
+      final response = await _dio.get('/search/tv', queryParameters: {
+        'query': query,
+        'page': 1,
+      });
+      final data = response.data as Map<String, dynamic>;
+      final results = (data['results'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      // Sort by popularity (highest first)
+      results.sort((a, b) => (b['popularity'] as num?)?.compareTo(a['popularity'] as num? ?? 0) ?? 0);
+
+      return results.map((item) {
+        final id = item['id']?.toString() ?? '';
+        final tmdbIdStr = 'tmdb:$id';
+
+        return {
+          'id': tmdbIdStr,
+          'type': 'series',
+          'name': item['name'] as String? ?? '',
+          'poster': getImageUrl(item['poster_path'] as String?),
+          'background': getImageUrl(item['backdrop_path'] as String?, size: 'w1280'),
+          'description': item['overview'] as String?,
+          'releaseInfo': item['first_air_date'] as String?,
+          'imdbRating': item['vote_average']?.toString(),
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('Error searching TV shows: $e');
+      return [];
+    }
+  }
+}

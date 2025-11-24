@@ -533,13 +533,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
         ],
       ),
-      footers: [
-        PrimaryButton(
-          onPressed: _addAddon,
-          density: ButtonDensity.icon,
-          child: const Icon(Icons.add),
-        ),
-      ],
     );
   }
 

@@ -14,19 +14,32 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
 
-  final List<Widget> _screens = [
-    const CatalogGridScreen(),
-    const LibraryScreen(),
-    const SettingsScreen(),
-  ];
+  late final List<Widget> _screens;
 
   final List<String> _screenNames = ['Home', 'Library', 'Settings'];
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      CatalogGridScreen(searchController: _searchController),
+      const LibraryScreen(),
+      const SettingsScreen(),
+    ];
+  }
 
   void _navigateTo(int index) {
     setState(() {
       _currentIndex = index;
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -36,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
         PersistentNavigationHeader(
           currentIndex: _currentIndex,
           onNavigate: _navigateTo,
+          searchController: _currentIndex == 0 ? _searchController : null,
         ),
       ],
       child: _screens[_currentIndex],

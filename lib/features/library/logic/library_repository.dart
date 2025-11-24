@@ -4,6 +4,8 @@ import '../../addons/logic/addon_client.dart';
 import '../../addons/logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/id_parser.dart';
+import '../../../core/services/tmdb_data_extractor.dart';
 import 'catalog_preferences_repository.dart';
 
 extension StringExtension on String {
@@ -163,11 +165,15 @@ class LibraryRepository {
 
   /// Enrich a single catalog item with full TMDB metadata (for hero section)
   /// This makes a full API call including images/logos
-  Future<CatalogItem?> enrichItemForHero(CatalogItem item) async {
+  Future<CatalogItem?> enrichItemForHero(
+    CatalogItem item, {
+    Map<String, dynamic>? cachedTmdbData,
+  }) async {
     try {
       final enrichedData = await _tmdbService.enrichCatalogItem(
         item.id,
         item.type,
+        cachedTmdbData: cachedTmdbData,
       );
       
       if (enrichedData != null) {
@@ -180,38 +186,55 @@ class LibraryRepository {
   }
 
   /// Get cast and crew data for an item (extracts from TMDB enrichment)
-  Future<Map<String, dynamic>?> getCastAndCrewForItem(CatalogItem item) async {
+  /// If cachedTmdbData is provided, uses it instead of fetching (avoids duplicate API calls)
+  Future<Map<String, dynamic>?> getCastAndCrewForItem(
+    CatalogItem item, {
+    Map<String, dynamic>? cachedTmdbData,
+  }) async {
     try {
-      final tmdbId = _tmdbService.extractTmdbId(item.id);
-      int? finalTmdbId = tmdbId;
+      Map<String, dynamic>? tmdbData = cachedTmdbData;
       
-      if (finalTmdbId == null && item.id.startsWith('tt')) {
-        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
-      }
-      
-      if (finalTmdbId == null) {
-        return null;
-      }
-      
-      // Fetch full metadata which includes credits
-      Map<String, dynamic>? tmdbData;
-      if (item.type == 'movie') {
-        tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
-      } else if (item.type == 'series') {
-        tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+      // Only fetch if no cached data provided
+      if (tmdbData == null) {
+        final tmdbId = IdParser.extractTmdbId(item.id);
+        int? finalTmdbId = tmdbId;
+        
+        if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
+          finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+        }
+        
+        if (finalTmdbId == null) {
+          return null;
+        }
+        
+        // Fetch full metadata which includes credits (will use cache if available)
+        if (item.type == 'movie') {
+          tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+        } else if (item.type == 'series') {
+          tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+        }
       }
       
       if (tmdbData == null) {
         return null;
       }
       
-      final credits = tmdbData['credits'] as Map<String, dynamic>?;
-      final cast = credits?['cast'] as List<dynamic>?;
-      final crew = credits?['crew'] as List<dynamic>?;
+      // Use centralized extractor
+      final castAndCrew = TmdbDataExtractor.extractCastAndCrew(tmdbData);
       
+      // Convert CastCrewMember lists back to JSON format for compatibility
       return {
-        'cast': cast ?? [],
-        'crew': crew ?? [],
+        'cast': castAndCrew['cast']!.map((m) => {
+          'name': m.name,
+          'character': m.character,
+          'profile_path': m.profileImageUrl,
+          'order': m.order,
+        }).toList(),
+        'crew': castAndCrew['crew']!.map((m) => {
+          'name': m.name,
+          'job': m.character,
+          'profile_path': m.profileImageUrl,
+        }).toList(),
       };
     } catch (e) {
       return null;
@@ -315,5 +338,53 @@ class LibraryRepository {
       return [];
     }
   }
-}
 
+  /// Search for items across all enabled catalogs
+  /// Returns items matching the query, sorted by popularity (imdbRating)
+  Future<List<CatalogItem>> searchItems(String query) async {
+    if (query.trim().isEmpty) {
+      return [];
+    }
+
+    final queryLower = query.toLowerCase().trim();
+    final allCatalogs = await getAllCatalogs();
+    final List<CatalogItem> results = [];
+
+    // Search through all catalog items
+    for (final catalogList in allCatalogs.values) {
+      for (final item in catalogList) {
+        // Search in name, description, and genres
+        final nameMatch = item.name.toLowerCase().contains(queryLower);
+        final descriptionMatch = item.description?.toLowerCase().contains(queryLower) ?? false;
+        final genreMatch = item.genres?.any((genre) => genre.toLowerCase().contains(queryLower)) ?? false;
+
+        if (nameMatch || descriptionMatch || genreMatch) {
+          results.add(item);
+        }
+      }
+    }
+
+    // Remove duplicates (same id)
+    final uniqueResults = <String, CatalogItem>{};
+    for (final item in results) {
+      if (!uniqueResults.containsKey(item.id)) {
+        uniqueResults[item.id] = item;
+      }
+    }
+
+    // Sort by popularity (imdbRating) - higher rating first
+    final sortedResults = uniqueResults.values.toList();
+    sortedResults.sort((a, b) {
+      final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
+      final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
+      
+      // Sort by rating descending, then by name ascending
+      if (ratingB != ratingA) {
+        return ratingB.compareTo(ratingA);
+      }
+      return a.name.compareTo(b.name);
+    });
+
+    return sortedResults;
+  }
+}
