@@ -129,7 +129,16 @@ class CatalogPreferencesRepository {
     }
   }
 
-  /// Get hero catalog info
+  /// Unset hero catalog (remove hero status from a specific catalog)
+  Future<void> unsetHeroCatalog(
+    String addonId,
+    String catalogType,
+    String? catalogId,
+  ) async {
+    await _database.unsetHeroCatalog(addonId, catalogType, catalogId);
+  }
+
+  /// Get hero catalog info (single, for backward compatibility)
   Future<CatalogInfo?> getHeroCatalog() async {
     final heroPreference = await _database.getHeroCatalog();
     if (heroPreference == null) return null;
@@ -154,6 +163,42 @@ class CatalogPreferencesRepository {
       enabled: heroPreference.enabled,
       isHeroSource: true,
     );
+  }
+
+  /// Get all hero catalog info
+  Future<List<CatalogInfo>> getHeroCatalogs() async {
+    final heroPreferences = await _database.getHeroCatalogs();
+    final List<CatalogInfo> heroCatalogs = [];
+
+    for (final heroPreference in heroPreferences) {
+      try {
+        final addon = await _addonRepository.getAddon(heroPreference.addonId);
+        if (addon == null) continue;
+
+        final manifest = _addonRepository.getManifest(addon);
+        final catalogDef = manifest.catalogs.firstWhere(
+          (c) => c.type == heroPreference.catalogType &&
+              (c.id?.isEmpty ?? true ? null : c.id) == heroPreference.catalogId,
+          orElse: () => CatalogDefinition(type: heroPreference.catalogType),
+        );
+
+        heroCatalogs.add(CatalogInfo(
+          addonId: heroPreference.addonId,
+          addonName: addon.name,
+          catalogType: heroPreference.catalogType,
+          catalogId: heroPreference.catalogId,
+          catalogName: catalogDef.name ?? 
+              '${_capitalize(heroPreference.catalogType)}${heroPreference.catalogId != null && heroPreference.catalogId!.isNotEmpty ? ' - ${heroPreference.catalogId}' : ''}',
+          enabled: heroPreference.enabled,
+          isHeroSource: true,
+        ));
+      } catch (e) {
+        // Continue with other catalogs if one fails
+        continue;
+      }
+    }
+
+    return heroCatalogs;
   }
 
   String _capitalize(String text) {

@@ -556,12 +556,14 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                   Builder(
                     builder: (context) {
                       if (currentItem.logo != null && currentItem.logo!.isNotEmpty) {
-                        return SizedBox(
-                          width: 600, // Fixed width for all logos
-                          height: 150, // Max height constraint
+                        return ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 800, // Increased max width
+                            maxHeight: 300, // Increased max height for better visibility
+                          ),
                           child: Image.network(
                             currentItem.logo!,
-                            fit: BoxFit.contain,
+                            fit: BoxFit.contain, // Maintain aspect ratio, fit within constraints
                             alignment: Alignment.centerLeft,
                             errorBuilder: (context, error, stackTrace) {
                               // Fallback to title if logo fails to load
@@ -570,8 +572,8 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return const SizedBox(
-                                width: 600,
-                                height: 150,
+                                width: 800,
+                                height: 300,
                                 child: Center(child: CircularProgressIndicator()),
                               );
                             },

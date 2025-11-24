@@ -78,6 +78,9 @@ class AppDatabase extends _$AppDatabase {
   Future<CatalogPreference?> getHeroCatalog() =>
       (select(catalogPreferences)..where((tbl) => tbl.isHeroSource.equals(true))).getSingleOrNull();
 
+  Future<List<CatalogPreference>> getHeroCatalogs() =>
+      (select(catalogPreferences)..where((tbl) => tbl.isHeroSource.equals(true))).get();
+
   Future<int> upsertCatalogPreference(CatalogPreferencesCompanion preference) =>
       into(catalogPreferences).insertOnConflictUpdate(preference);
 
@@ -105,11 +108,7 @@ class AppDatabase extends _$AppDatabase {
     String catalogType,
     String? catalogId,
   ) async {
-    // First, unset all hero catalogs
-    await (update(catalogPreferences)..where((tbl) => tbl.isHeroSource.equals(true)))
-        .write(CatalogPreferencesCompanion(isHeroSource: Value(false)));
-
-    // Then set the new hero catalog
+    // Set the specific catalog as hero (allow multiple hero catalogs)
     final query = update(catalogPreferences)
       ..where((tbl) => tbl.addonId.equals(addonId))
       ..where((tbl) => tbl.catalogType.equals(catalogType));
@@ -121,6 +120,25 @@ class AppDatabase extends _$AppDatabase {
     }
     
     return await query.write(CatalogPreferencesCompanion(isHeroSource: Value(true)));
+  }
+
+  Future<int> unsetHeroCatalog(
+    String addonId,
+    String catalogType,
+    String? catalogId,
+  ) async {
+    // Unset the specific catalog's hero status
+    final query = update(catalogPreferences)
+      ..where((tbl) => tbl.addonId.equals(addonId))
+      ..where((tbl) => tbl.catalogType.equals(catalogType));
+    
+    if (catalogId == null || catalogId.isEmpty) {
+      query.where((tbl) => tbl.catalogId.isNull());
+    } else {
+      query.where((tbl) => tbl.catalogId.equals(catalogId));
+    }
+    
+    return await query.write(CatalogPreferencesCompanion(isHeroSource: Value(false)));
   }
 }
 

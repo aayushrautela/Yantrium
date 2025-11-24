@@ -598,31 +598,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setHeroCatalog(CatalogInfo catalog) async {
     try {
-      await _catalogPreferencesRepository.setHeroCatalog(
-        catalog.addonId,
-        catalog.catalogType,
-        catalog.catalogId,
-      );
-      _loadCatalogs();
-      if (mounted) {
-        showToast(
-          context: context,
-          builder: (context, overlay) => Card(
-            child: Padding(
-              padding: AppConstants.contentPadding,
-              child: Text('Hero catalog set to: ${catalog.catalogName}'),
-            ),
-          ),
+      // Toggle behavior: if already hero, unset it; otherwise, set it as hero
+      if (catalog.isHeroSource) {
+        await _catalogPreferencesRepository.unsetHeroCatalog(
+          catalog.addonId,
+          catalog.catalogType,
+          catalog.catalogId,
         );
+        _loadCatalogs();
+        if (mounted) {
+          showToast(
+            context: context,
+            location: ToastLocation.topRight,
+            builder: (context, overlay) => SizedBox(
+              width: 400,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Hero catalog removed: ${catalog.catalogName}',
+                    style: const TextStyle(fontSize: 16),
+                    softWrap: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      } else {
+        await _catalogPreferencesRepository.setHeroCatalog(
+          catalog.addonId,
+          catalog.catalogType,
+          catalog.catalogId,
+        );
+        _loadCatalogs();
+        if (mounted) {
+          showToast(
+            context: context,
+            location: ToastLocation.topRight,
+            builder: (context, overlay) => SizedBox(
+              width: 400,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Hero catalog set to: ${catalog.catalogName}',
+                    style: const TextStyle(fontSize: 16),
+                    softWrap: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         showToast(
           context: context,
-          builder: (context, overlay) => Card(
-            child: Padding(
-              padding: AppConstants.contentPadding,
-              child: Text('Failed to set hero catalog: $e'),
+          location: ToastLocation.topRight,
+          builder: (context, overlay) => SizedBox(
+            width: 400,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to ${catalog.isHeroSource ? "unset" : "set"} hero catalog: $e',
+                  style: const TextStyle(fontSize: 16),
+                  softWrap: true,
+                ),
+              ),
             ),
           ),
         );

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/catalog_item.dart';
 import '../../addons/logic/addon_client.dart';
 import '../../addons/logic/addon_repository.dart';
@@ -97,11 +98,11 @@ class LibraryRepository {
     return sections;
   }
 
-  /// Get hero items from the selected hero catalog (for carousel)
+  /// Get hero items from all hero catalogs (for carousel)
   Future<List<CatalogItem>> getHeroItems() async {
     try {
-      final heroCatalog = await _catalogPreferencesRepository.getHeroCatalog();
-      if (heroCatalog == null) {
+      final heroCatalogs = await _catalogPreferencesRepository.getHeroCatalogs();
+      if (heroCatalogs.isEmpty) {
         // Fallback to first section if no hero catalog is set
         final sections = await getCatalogSections();
         if (sections.isNotEmpty && sections[0].items.isNotEmpty) {
@@ -116,27 +117,39 @@ class LibraryRepository {
         return [];
       }
 
-      // Get the addon
-      final addon = await _addonRepository.getAddon(heroCatalog.addonId);
-      if (addon == null) return [];
+      // Aggregate items from all hero catalogs
+      final allItems = <CatalogItem>[];
+      final itemsPerCatalog = (10 / heroCatalogs.length).ceil(); // Distribute items across catalogs
 
-      // Get the catalog
-      final client = AddonClient(addon.baseUrl);
-      final result = await client.getCatalog(
-        heroCatalog.catalogType,
-        heroCatalog.catalogId,
-      );
-      
-      final rawItems = result['metas'] as List<CatalogItem>;
-      if (rawItems.isEmpty) return [];
+      for (final heroCatalog in heroCatalogs) {
+        try {
+          // Get the addon
+          final addon = await _addonRepository.getAddon(heroCatalog.addonId);
+          if (addon == null) continue;
 
-      // Enrich first 10 items for hero carousel
-      final items = <CatalogItem>[];
-      for (final item in rawItems.take(10)) {
-        final enriched = await enrichItemForHero(item);
-        if (enriched != null) items.add(enriched);
+          // Get the catalog
+          final client = AddonClient(addon.baseUrl);
+          final result = await client.getCatalog(
+            heroCatalog.catalogType,
+            heroCatalog.catalogId,
+          );
+          
+          final rawItems = result['metas'] as List<CatalogItem>;
+          if (rawItems.isEmpty) continue;
+
+          // Enrich items from this catalog
+          for (final item in rawItems.take(itemsPerCatalog)) {
+            final enriched = await enrichItemForHero(item);
+            if (enriched != null) allItems.add(enriched);
+          }
+        } catch (e) {
+          // Continue with other catalogs if one fails
+          continue;
+        }
       }
-      return items;
+
+      // Limit total items to 10 for the hero carousel
+      return allItems.take(10).toList();
     } catch (e) {
       return [];
     }
@@ -163,6 +176,45 @@ class LibraryRepository {
       return item; // Return original if enrichment fails
     } catch (e) {
       return item; // Return original on error
+    }
+  }
+
+  /// Get cast and crew data for an item (extracts from TMDB enrichment)
+  Future<Map<String, dynamic>?> getCastAndCrewForItem(CatalogItem item) async {
+    try {
+      final tmdbId = _tmdbService.extractTmdbId(item.id);
+      int? finalTmdbId = tmdbId;
+      
+      if (finalTmdbId == null && item.id.startsWith('tt')) {
+        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+      }
+      
+      if (finalTmdbId == null) {
+        return null;
+      }
+      
+      // Fetch full metadata which includes credits
+      Map<String, dynamic>? tmdbData;
+      if (item.type == 'movie') {
+        tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+      } else if (item.type == 'series') {
+        tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+      }
+      
+      if (tmdbData == null) {
+        return null;
+      }
+      
+      final credits = tmdbData['credits'] as Map<String, dynamic>?;
+      final cast = credits?['cast'] as List<dynamic>?;
+      final crew = credits?['crew'] as List<dynamic>?;
+      
+      return {
+        'cast': cast ?? [],
+        'crew': crew ?? [],
+      };
+    } catch (e) {
+      return null;
     }
   }
 

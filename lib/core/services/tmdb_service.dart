@@ -216,6 +216,20 @@ class TmdbService {
       final logoUrl = getImageUrl(logoPath, size: 'w500');
       debugPrint('[LOGO] Final logo URL: $logoUrl');
 
+      // Extract full cast and crew data with profile images
+      final fullCast = cast?.map((c) => {
+            'name': c['name'],
+            'character': c['character'],
+            'profile_path': c['profile_path'],
+            'order': c['order'],
+          }).toList();
+      
+      final fullCrew = crew?.map((c) => {
+            'name': c['name'],
+            'job': c['job'],
+            'profile_path': c['profile_path'],
+          }).toList();
+
       return {
         'id': originalId,
         'type': 'movie',
@@ -230,6 +244,8 @@ class TmdbService {
         'runtime': tmdbData['runtime']?.toString(),
         'director': directors,
         'cast': cast?.take(10).map((c) => c['name'] as String).toList(),
+        'castFull': fullCast,
+        'crewFull': fullCrew,
         'videos': trailers,
       };
     } catch (e) {
@@ -348,6 +364,20 @@ class TmdbService {
         // Ignore runtime extraction errors
       }
 
+      // Extract full cast and crew data with profile images
+      final fullCast = cast?.map((c) => {
+            'name': c['name'],
+            'character': c['character'],
+            'profile_path': c['profile_path'],
+            'order': c['order'],
+          }).toList();
+      
+      final fullCrew = crew?.map((c) => {
+            'name': c['name'],
+            'job': c['job'],
+            'profile_path': c['profile_path'],
+          }).toList();
+
       return {
         'id': originalId,
         'type': 'series',
@@ -362,6 +392,8 @@ class TmdbService {
         'runtime': runtime,
         'director': creators,
         'cast': cast?.take(10).map((c) => c['name'] as String).toList(),
+        'castFull': fullCast,
+        'crewFull': fullCrew,
         'videos': trailers,
       };
     } catch (e) {
@@ -402,6 +434,130 @@ class TmdbService {
     }
 
     return null;
+  }
+
+  /// Get cast and crew for a movie or TV show
+  Future<Map<String, dynamic>?> getCastAndCrew(int tmdbId, String type) async {
+    try {
+      final endpoint = type == 'movie' ? '/movie/$tmdbId/credits' : '/tv/$tmdbId/credits';
+      final response = await _dio.get(endpoint);
+      final data = response.data as Map<String, dynamic>;
+
+      final cast = (data['cast'] as List<dynamic>?)
+          ?.map((c) => {
+                'name': c['name'],
+                'character': c['character'],
+                'profile_path': c['profile_path'],
+                'order': c['order'],
+              })
+          .toList();
+
+      final crew = (data['crew'] as List<dynamic>?)
+          ?.map((c) => {
+                'name': c['name'],
+                'job': c['job'],
+                'profile_path': c['profile_path'],
+              })
+          .toList();
+
+      return {
+        'cast': cast ?? [],
+        'crew': crew ?? [],
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get movie recommendations sorted by popularity
+  Future<List<Map<String, dynamic>>> getMovieRecommendations(int tmdbId) async {
+    try {
+      final response = await _dio.get('/movie/$tmdbId/recommendations');
+      final data = response.data as Map<String, dynamic>;
+      final results = (data['results'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      // Sort by popularity (highest first) and take top 15
+      results.sort((a, b) => (b['popularity'] as num).compareTo(a['popularity'] as num));
+      return results.take(15).toList();
+    } catch (e) {
+      debugPrint('Error fetching movie recommendations: $e');
+      return [];
+    }
+  }
+
+  /// Get TV show recommendations sorted by popularity
+  Future<List<Map<String, dynamic>>> getTvRecommendations(int tmdbId) async {
+    try {
+      final response = await _dio.get('/tv/$tmdbId/recommendations');
+      final data = response.data as Map<String, dynamic>;
+      final results = (data['results'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      // Sort by popularity (highest first) and take top 15
+      results.sort((a, b) => (b['popularity'] as num).compareTo(a['popularity'] as num));
+      return results.take(15).toList();
+    } catch (e) {
+      debugPrint('Error fetching TV recommendations: $e');
+      return [];
+    }
+  }
+
+  /// Get similar/recommended movies or TV shows
+  Future<List<Map<String, dynamic>>> getSimilar(int tmdbId, String type) async {
+    try {
+      final endpoint = type == 'movie' ? '/movie/$tmdbId/similar' : '/tv/$tmdbId/similar';
+      final response = await _dio.get(endpoint);
+      final data = response.data as Map<String, dynamic>;
+
+      final results = data['results'] as List<dynamic>? ?? [];
+
+      // Sort by popularity (highest first) and take top 15
+      results.sort((a, b) => (b['popularity'] as num?)?.compareTo(a['popularity'] as num? ?? 0) ?? 0);
+      final topResults = results.take(15);
+
+      return topResults.map((item) {
+        final id = item['id']?.toString() ?? '';
+        final tmdbIdStr = 'tmdb:$id';
+
+        return {
+          'id': tmdbIdStr,
+          'type': type,
+          'name': type == 'movie' ? (item['title'] as String?) : (item['name'] as String?),
+          'poster': getImageUrl(item['poster_path'] as String?),
+          'background': getImageUrl(item['backdrop_path'] as String?, size: 'w1280'),
+          'description': item['overview'] as String?,
+          'releaseInfo': type == 'movie'
+              ? (item['release_date'] as String?)
+              : (item['first_air_date'] as String?),
+          'imdbRating': item['vote_average']?.toString(),
+        };
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get episodes for a specific season of a TV series
+  Future<Map<String, dynamic>?> getSeasonEpisodes(int tmdbId, int seasonNumber) async {
+    try {
+      final response = await _dio.get('/tv/$tmdbId/season/$seasonNumber');
+      return response.data as Map<String, dynamic>;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get all seasons for a TV series
+  Future<List<Map<String, dynamic>>> getSeasons(int tmdbId) async {
+    try {
+      final response = await _dio.get('/tv/$tmdbId');
+      final data = response.data as Map<String, dynamic>;
+      final seasons = data['seasons'] as List<dynamic>? ?? [];
+      return seasons.cast<Map<String, dynamic>>();
+    } catch (e) {
+      return [];
+    }
   }
 }
 
