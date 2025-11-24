@@ -36,7 +36,7 @@ class VideoPlayerScreen extends StatefulWidget {
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final MediaKitPlayerController _controller;
-  bool _showControls = true;
+  bool _showControls = false; // Start hidden when playing
   Timer? _controlsTimer;
   bool _isFullscreen = false;
 
@@ -45,6 +45,59 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.initState();
     _controller = MediaKitPlayerController();
     _startPlayback();
+    // Listen to playing state to manage auto-hide timer
+    _controller.playingStream.listen((isPlaying) {
+      if (isPlaying) {
+        // When playing starts, start the auto-hide timer
+        _startAutoHideTimer();
+      } else {
+        // When paused, cancel timer and ensure paused overlay is visible
+        // (paused overlay is always shown, independent of _showControls)
+        _cancelAutoHideTimer();
+        // Don't modify _showControls when paused - paused overlay doesn't depend on it
+      }
+    });
+  }
+
+  void _startAutoHideTimer() {
+    _cancelAutoHideTimer();
+    _controlsTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted && _controller.isPlaying) {
+        setState(() => _showControls = false);
+      }
+    });
+  }
+
+  void _cancelAutoHideTimer() {
+    _controlsTimer?.cancel();
+    _controlsTimer = null;
+  }
+
+  void _onControlsHoverEnter() {
+    // Show controls on hover (works for both playing and paused)
+    setState(() => _showControls = true);
+    // Only manage timer when playing (paused overlay stays visible)
+    if (_controller.isPlaying) {
+      _cancelAutoHideTimer();
+    }
+  }
+
+  void _onControlsHoverExit() {
+    // Only start timer when playing (when paused, controls can stay visible)
+    if (_controller.isPlaying) {
+      _startAutoHideTimer();
+    }
+    // When paused, keep controls visible even on hover exit (user might want to use them)
+    // Or hide them - let's hide them for consistency
+    if (!_controller.isPlaying) {
+      setState(() => _showControls = false);
+    }
+  }
+
+  void _onControlInteraction() {
+    if (_controller.isPlaying && _showControls) {
+      _startAutoHideTimer();
+    }
   }
 
   Future<void> _startPlayback() async {
@@ -104,40 +157,70 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       color: Colors.black,
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: MouseRegion(
-          onEnter: (_) => setState(() => _showControls = true),
-          onExit: (_) {
-            if (_controller.isPlaying) {
-              setState(() => _showControls = false);
-            }
-          },
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Video player
-              Video(
-                controller: _controller.videoController,
-                controls: NoVideoControls,
-                fit: BoxFit.contain,
-              ),
+        body: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 1. Video player (bottom layer)
+            Video(
+              controller: _controller.videoController,
+              controls: NoVideoControls,
+              fit: BoxFit.contain,
+            ),
 
-              // Overlays
-              StreamBuilder<bool>(
-                stream: _controller.playingStream,
-                initialData: false,
-                builder: (context, snapshot) {
-                  final isPlaying = snapshot.data ?? false;
-                  if (!isPlaying) {
-                    return _buildPausedOverlay();
-                  }
-                  if (_showControls) {
-                    return _buildControlsOverlay();
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-            ],
-          ),
+            // 2. Info card / Paused overlay (middle layer - only when paused)
+            StreamBuilder<bool>(
+              stream: _controller.playingStream,
+              initialData: false,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                if (!isPlaying) {
+                  return _buildPausedOverlay();
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+
+            // 3. Bottom hover detection area (for showing controls when playing)
+            StreamBuilder<bool>(
+              stream: _controller.playingStream,
+              initialData: false,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                // Show hover area when playing and controls are hidden
+                // (When paused, controls are always visible, so no hover area needed)
+                if (isPlaying && !_showControls) {
+                  return Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 200,
+                    child: MouseRegion(
+                      onEnter: (_) => _onControlsHoverEnter(),
+                      child: Container(color: Colors.transparent),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+
+            // 4. Controls overlay (top layer - always on top when shown)
+            // When paused, always show controls on top of info card
+            // When playing, show controls based on hover/timer
+            StreamBuilder<bool>(
+              stream: _controller.playingStream,
+              initialData: false,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                // When paused, always show controls (on top of info card)
+                // When playing, show controls only if _showControls is true
+                if (!isPlaying || _showControls) {
+                  return _buildControlsOverlay();
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -258,38 +341,42 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildControlsOverlay() {
-    return Column(
-      children: [
-        // Top bar with back button and title
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    widget.title ?? '',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+    return MouseRegion(
+      onEnter: (_) => _onControlsHoverEnter(),
+      onExit: (_) => _onControlsHoverExit(),
+      child: Column(
+        children: [
+          // Top bar with back button and title
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      widget.title ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const Spacer(),
-        // Bottom controls
-        _buildBottomControls(),
-      ],
+          const Spacer(),
+          // Bottom controls
+          _buildBottomControls(),
+        ],
+      ),
     );
   }
 
@@ -306,22 +393,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             final position = positionSnapshot.data ?? 0.0;
             final duration = _controller.duration;
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  ),
                 ),
-              ),
-              child: Column(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Progress bar
                   Slider(
                     value: duration > 0 ? position.clamp(0.0, duration) : 0.0,
                     max: duration > 0 ? duration : 1.0,
-                    onChanged: (value) => _controller.seek(value),
+                    onChanged: (value) {
+                      _controller.seek(value);
+                      _onControlInteraction();
+                    },
                     activeColor: Colors.white,
                     inactiveColor: Colors.white30,
                   ),
@@ -356,7 +446,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 child: Slider(
                                   value: volume,
                                   max: 100.0,
-                                  onChanged: (value) => _controller.setVolume(value),
+                                  onChanged: (value) {
+                                    _controller.setVolume(value);
+                                    _onControlInteraction();
+                                  },
                                   activeColor: Colors.white,
                                   inactiveColor: Colors.white30,
                                 ),
@@ -370,17 +463,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.replay_10, color: Colors.white, size: 36),
-                            onPressed: () => _controller.seek(position - 10),
+                            onPressed: () {
+                              _controller.seek(position - 10);
+                              _onControlInteraction();
+                            },
                           ),
                           const SizedBox(width: 20),
                           IconButton(
                             icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 48),
-                            onPressed: () => _controller.togglePlayPause(),
+                            onPressed: () {
+                              _controller.togglePlayPause();
+                              _onControlInteraction();
+                            },
                           ),
                           const SizedBox(width: 20),
                           IconButton(
                             icon: const Icon(Icons.forward_10, color: Colors.white, size: 36),
-                            onPressed: () => _controller.seek(position + 10),
+                            onPressed: () {
+                              _controller.seek(position + 10);
+                              _onControlInteraction();
+                            },
                           ),
                         ],
                       ),
