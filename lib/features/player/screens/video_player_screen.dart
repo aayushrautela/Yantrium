@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit_video/media_kit_video.dart';
-import '../logic/media_kit_player_controller.dart';
+import 'package:video_player/video_player.dart';
+import '../logic/fvp_player_controller.dart';
 import '../../../core/constants/app_constants.dart';
 
-/// Video player screen with MPV integration and custom controls
+/// Video player screen with FVP integration and custom controls
 class VideoPlayerScreen extends StatefulWidget {
   final String streamUrl;
   final String? title;
@@ -35,7 +35,7 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late final MediaKitPlayerController _controller;
+  late final FvpPlayerController _controller;
   bool _showControls = false; // Start hidden when playing
   Timer? _controlsTimer;
   bool _isFullscreen = false;
@@ -43,7 +43,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = MediaKitPlayerController();
+    _controller = FvpPlayerController();
     _startPlayback();
     // Listen to playing state to manage auto-hide timer
     _controller.playingStream.listen((isPlaying) {
@@ -159,13 +159,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         backgroundColor: Colors.black,
         body: Stack(
           alignment: Alignment.center,
-          children: [
+            children: [
             // 1. Video player (bottom layer)
-            Video(
-              controller: _controller.videoController,
-              controls: NoVideoControls,
-              fit: BoxFit.contain,
-            ),
+            _controller.videoController != null
+                ? ValueListenableBuilder<VideoPlayerValue>(
+                    valueListenable: _controller.videoController!,
+                    builder: (context, value, child) {
+                      if (value.isInitialized) {
+                        return Center(
+                          child: AspectRatio(
+                            aspectRatio: value.aspectRatio,
+                            child: VideoPlayer(_controller.videoController!),
+                          ),
+                        );
+                      }
+                      return const Center(child: CircularProgressIndicator());
+                    },
+                  )
+                : const Center(child: CircularProgressIndicator()),
 
             // 2. Info card / Paused overlay (middle layer - only when paused)
             StreamBuilder<bool>(
@@ -219,7 +230,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 }
                 return const SizedBox.shrink();
               },
-            ),
+          ),
           ],
         ),
       ),
@@ -227,7 +238,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildPausedOverlay() {
-    return Container(
+                return Container(
       color: Colors.black.withOpacity(0.8),
       child: Stack(
         children: [
@@ -269,7 +280,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                               color: Colors.blueAccent,
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -320,10 +331,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                  ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
+                    children: [
                           Icon(Icons.play_arrow, size: 28),
                           SizedBox(width: 12),
                           Text('RESUME', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -334,10 +345,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+                      ),
+                    ],
+                  ),
+                );
   }
 
   Widget _buildControlsOverlay() {
@@ -348,26 +359,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           // Top bar with back button and title
           SafeArea(
-            child: Padding(
+      child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Row(
-                children: [
-                  IconButton(
+        child: Row(
+          children: [
+            IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
                   const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
+            Expanded(
+              child: Text(
                       widget.title ?? '',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
                         fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
                 ],
               ),
             ),
@@ -375,7 +386,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           const Spacer(),
           // Bottom controls
           _buildBottomControls(),
-        ],
+          ],
       ),
     );
   }
@@ -401,10 +412,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
                   ),
                 ),
-                child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Progress bar
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Progress bar
                   Slider(
                     value: duration > 0 ? position.clamp(0.0, duration) : 0.0,
                     max: duration > 0 ? duration : 1.0,
@@ -414,10 +425,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     },
                     activeColor: Colors.white,
                     inactiveColor: Colors.white30,
-                  ),
-                  Row(
+            ),
+            Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+              children: [
                       Text(_formatDuration(position), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                       Text(_formatDuration(duration), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                     ],
@@ -434,23 +445,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         builder: (context, volumeSnapshot) {
                           final volume = volumeSnapshot.data ?? 100.0;
                           return Row(
-                            children: [
-                              Icon(
+                  children: [
+                    Icon(
                                 volume > 50 ? Icons.volume_up : volume > 0 ? Icons.volume_down : Icons.volume_off,
-                                color: Colors.white,
+                      color: Colors.white,
                                 size: 28,
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
                                 width: 120,
-                                child: Slider(
-                                  value: volume,
-                                  max: 100.0,
-                                  onChanged: (value) {
-                                    _controller.setVolume(value);
+                      child: Slider(
+                        value: volume,
+                        max: 100.0,
+                        onChanged: (value) {
+                          _controller.setVolume(value);
                                     _onControlInteraction();
-                                  },
-                                  activeColor: Colors.white,
+                        },
+                        activeColor: Colors.white,
                                   inactiveColor: Colors.white30,
                                 ),
                               ),
@@ -483,9 +494,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                               _controller.seek(position + 10);
                               _onControlInteraction();
                             },
-                          ),
-                        ],
-                      ),
+                    ),
+                  ],
+                ),
                       // Right side: Subtitles, Stream, Audio, Settings
                       Row(
                         children: [
@@ -510,18 +521,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                               // TODO: Implement subtitle selection
                             },
                           ),
-                          IconButton(
+                IconButton(
                             icon: const Icon(Icons.settings, color: Colors.white, size: 28),
-                            onPressed: () {
+                  onPressed: () {
                               // TODO: Implement settings
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
                 ],
-              ),
+      ),
             );
           },
         );

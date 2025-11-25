@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Yatrium
+Comment=Media streaming application
+Exec=yantrium %u
+Icon=com.yantrium.Yatrium
+Type=Application
+Categories=AudioVideo;Video;Player;
+MimeType=x-scheme-handler/yantrium;
+StartupNotify=true

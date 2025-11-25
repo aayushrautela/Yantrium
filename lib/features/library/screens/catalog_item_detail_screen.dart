@@ -1545,35 +1545,46 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       );
     }
 
-    // Calculate responsive column count based on screen width
-    final screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount;
-    if (screenWidth > 1600) {
-      crossAxisCount = 8;
-    } else if (screenWidth > 1200) {
-      crossAxisCount = 7;
-    } else if (screenWidth > 900) {
-      crossAxisCount = 6;
-    } else if (screenWidth > 600) {
-      crossAxisCount = 5;
-    } else {
-      crossAxisCount = 4;
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        
+        // Calculate card width to match catalog cards (240px) but scale responsively
+        // Target: ~240px per card with spacing
+        final targetCardWidth = 240.0;
+        final spacing = 16.0;
+        final minCardWidth = 180.0; // Minimum card width
+        final maxCardWidth = 280.0; // Maximum card width
+        
+        // Calculate how many cards fit with target width
+        int crossAxisCount = (availableWidth / (targetCardWidth + spacing)).floor();
+        crossAxisCount = crossAxisCount.clamp(3, 8); // Between 3 and 8 columns
+        
+        // Calculate actual card width based on available space
+        final actualCardWidth = ((availableWidth - (crossAxisCount - 1) * spacing) / crossAxisCount).clamp(minCardWidth, maxCardWidth);
+        
+        // Calculate aspect ratio: width / (image height + spacing + text height)
+        // Image height = cardWidth * 1.5 (2:3 ratio), text ~42px, spacing 12px
+        final imageHeight = actualCardWidth * 1.5;
+        final totalHeight = imageHeight + 12 + 42; // image + spacing + text
+        final aspectRatio = actualCardWidth / totalHeight;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 100),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 32,
-        childAspectRatio: 0.545, // 240px width / ~440px height (360px image + ~80px text)
-      ),
-      itemCount: _similarItems.length,
-      itemBuilder: (context, index) {
-        final similarItem = _similarItems[index];
-        return _SimilarItemCard(item: similarItem);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 100),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: 32,
+            childAspectRatio: aspectRatio,
+          ),
+          itemCount: _similarItems.length,
+          itemBuilder: (context, index) {
+            final similarItem = _similarItems[index];
+            return _SimilarItemCard(item: similarItem, cardWidth: actualCardWidth);
+          },
+        );
       },
     );
   }
@@ -1601,36 +1612,46 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       );
     }
 
-    // Calculate responsive column count based on screen width
-    final screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount;
-    if (screenWidth > 1600) {
-      crossAxisCount = 8;
-    } else if (screenWidth > 1200) {
-      crossAxisCount = 7;
-    } else if (screenWidth > 900) {
-      crossAxisCount = 6;
-    } else if (screenWidth > 600) {
-      crossAxisCount = 5;
-    } else {
-      crossAxisCount = 4;
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        
+        // Calculate card width to match catalog cards (240px) but scale responsively
+        // Target: ~240px per card with spacing
+        final targetCardWidth = 240.0;
+        final spacing = 16.0;
+        final minCardWidth = 180.0; // Minimum card width
+        final maxCardWidth = 280.0; // Maximum card width
+        
+        // Calculate how many cards fit with target width
+        int crossAxisCount = (availableWidth / (targetCardWidth + spacing)).floor();
+        crossAxisCount = crossAxisCount.clamp(3, 8); // Between 3 and 8 columns
+        
+        // Calculate actual card width based on available space
+        final actualCardWidth = ((availableWidth - (crossAxisCount - 1) * spacing) / crossAxisCount).clamp(minCardWidth, maxCardWidth);
+        
+        // Calculate aspect ratio: width / (image height + spacing + text height)
+        // Image is circular with diameter = cardWidth * 0.8, text ~42px, spacing 10px
+        final imageHeight = actualCardWidth * 0.8; // Circular image diameter
+        final totalHeight = imageHeight + 10 + 42; // image + spacing + text
+        final aspectRatio = actualCardWidth / totalHeight;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 100),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 16,
-        childAspectRatio:
-            0.55, // Adjusted to give more vertical space for cast cards
-      ),
-      itemCount: displayMembers.length,
-      itemBuilder: (context, index) {
-        final member = displayMembers[index];
-        return _CastCrewCard(member: member);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 100),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: 32,
+            childAspectRatio: aspectRatio,
+          ),
+          itemCount: displayMembers.length,
+          itemBuilder: (context, index) {
+            final member = displayMembers[index];
+            return _CastCrewCard(member: member, cardWidth: actualCardWidth);
+          },
+        );
       },
     );
   }
@@ -1854,9 +1875,11 @@ class _TabButton extends StatelessWidget {
 
 class _CastCrewCard extends StatefulWidget {
   final CastCrewMember member;
+  final double cardWidth;
 
   const _CastCrewCard({
     required this.member,
+    required this.cardWidth,
   });
 
   @override
@@ -1873,86 +1896,110 @@ class _CastCrewCardState extends State<_CastCrewCard> {
         ? tmdbService.getImageUrl(widget.member.profileImageUrl, size: 'w185')
         : null;
 
+    // Calculate image size as 80% of card width for circular image
+    final imageSize = widget.cardWidth * 0.8;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          // Circular profile image (50% bigger: 100 -> 150) with hover animation
-          ClipOval(
-            child: AnimatedScale(
-              scale: _isHovered ? 1.1 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              child: profileImageUrl != null
-                  ? Image.network(
-                      profileImageUrl,
-                      width: 150,
-                      height: 150,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 150,
-                          height: 150,
-                          color: Theme.of(context).colorScheme.muted,
-                          child: Icon(
-                            Icons.person,
-                            size: 75,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .foreground
-                                .withOpacity(0.5),
-                          ),
-                        );
-                      },
-                    )
-                  : Container(
-                      width: 150,
-                      height: 150,
-                      color: Theme.of(context).colorScheme.muted,
-                      child: Icon(
-                        Icons.person,
-                        size: 75,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .foreground
-                            .withOpacity(0.5),
+      child: SizedBox(
+        width: widget.cardWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Circular profile image with hover animation
+            ClipOval(
+              child: AnimatedScale(
+                scale: _isHovered ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: profileImageUrl != null
+                    ? Image.network(
+                        profileImageUrl,
+                        width: imageSize,
+                        height: imageSize,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: imageSize,
+                            height: imageSize,
+                            color: Theme.of(context).colorScheme.muted,
+                            child: Icon(
+                              Icons.person,
+                              size: imageSize * 0.5,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .foreground
+                                  .withOpacity(0.5),
+                            ),
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            width: imageSize,
+                            height: imageSize,
+                            color: Theme.of(context).colorScheme.muted,
+                            child: const Center(
+                              child: material.CircularProgressIndicator(),
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        width: imageSize,
+                        height: imageSize,
+                        color: Theme.of(context).colorScheme.muted,
+                        child: Icon(
+                          Icons.person,
+                          size: imageSize * 0.5,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .foreground
+                              .withOpacity(0.5),
+                        ),
                       ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Name
-          Text(
-            widget.member.name,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (widget.member.character != null) ...[
-            const SizedBox(height: 4),
-            // Character/Role
-            Text(
-              widget.member.character!,
-              style: TextStyle(
-                fontSize: 13,
-                color:
-                    Theme.of(context).colorScheme.foreground.withOpacity(0.7),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 10),
+            // Name
+            SizedBox(
+              width: widget.cardWidth,
+              child: Text(
+                widget.member.name,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (widget.member.character != null) ...[
+              const SizedBox(height: 4),
+              // Character/Role
+              SizedBox(
+                width: widget.cardWidth,
+                child: Text(
+                  widget.member.character!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .foreground
+                        .withOpacity(0.7),
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1960,8 +2007,9 @@ class _CastCrewCardState extends State<_CastCrewCard> {
 
 class _SimilarItemCard extends StatefulWidget {
   final CatalogItem item;
+  final double cardWidth;
 
-  const _SimilarItemCard({required this.item});
+  const _SimilarItemCard({required this.item, required this.cardWidth});
 
   @override
   State<_SimilarItemCard> createState() => _SimilarItemCardState();
@@ -1986,18 +2034,17 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
           );
         },
         child: SizedBox(
-          width: 240,
+          width: widget.cardWidth,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               // Image with rounded corners, no frame, with zoom animation
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
-                  width: 240,
-                  height: 360,
+                  width: widget.cardWidth,
+                  height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
                   child: Stack(
                     children: [
                       AnimatedScale(
@@ -2008,12 +2055,12 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
                         ? Image.network(
                             widget.item.poster!,
                             fit: BoxFit.cover,
-                            width: 240,
-                            height: 360,
+                            width: widget.cardWidth,
+                            height: widget.cardWidth * 1.5,
                             errorBuilder: (context, error, stackTrace) =>
                                 Container(
-                              width: 240,
-                              height: 360,
+                              width: widget.cardWidth,
+                              height: widget.cardWidth * 1.5,
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.muted,
                                 borderRadius: BorderRadius.circular(8),
@@ -2039,17 +2086,17 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Container(
-                                width: 240,
-                                height: 360,
+                                width: widget.cardWidth,
+                                height: widget.cardWidth * 1.5,
                                 color: Theme.of(context).colorScheme.muted,
                                 child: const Center(
-                                    child: CircularProgressIndicator()),
+                                    child: material.CircularProgressIndicator()),
                               );
                             },
                           )
                         : Container(
-                            width: 240,
-                            height: 360,
+                            width: widget.cardWidth,
+                            height: widget.cardWidth * 1.5,
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.muted,
                               borderRadius: BorderRadius.circular(8),
@@ -2116,20 +2163,18 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
                   ),
                 ),
               ),
-
+              
               // Text below the image (centered)
               const SizedBox(height: 12),
-              Flexible(
-                child: SizedBox(
-                  width: 240,
-                  child: Text(
-                    widget.item.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(height: 1.3),
-                  ).semiBold(),
-                ),
+              SizedBox(
+                width: widget.cardWidth,
+                child: Text(
+                  widget.item.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(height: 1.3),
+                ).semiBold(),
               ),
             ],
           ),

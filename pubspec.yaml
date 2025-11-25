@@ -53,10 +53,14 @@ dependencies:
   # UI Framework
   shadcn_flutter: ^0.0.47
   
-  # Video playback
-  media_kit: ^1.1.10
-  media_kit_video: ^1.2.6
-  media_kit_libs_linux: ^1.0.5
+  # Video playback - FVP (FFmpeg-based, easier for Flatpak)
+  fvp: ^0.35.1
+  video_player: ^2.9.2
+  
+  # OAuth and deep linking
+  flutter_web_auth: ^0.6.0
+  url_launcher: ^6.3.1
+  app_links: ^7.0.0
 
 dev_dependencies:
   flutter_test:

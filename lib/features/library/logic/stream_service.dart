@@ -43,10 +43,10 @@ class StreamService {
 
       // Only fetch if no cached data provided
       if (tmdbData == null) {
-        if (item.type == 'movie') {
-          tmdbData = await _tmdbService.getMovieMetadata(tmdbId);
-        } else if (item.type == 'series') {
-          tmdbData = await _tmdbService.getTvMetadata(tmdbId);
+      if (item.type == 'movie') {
+        tmdbData = await _tmdbService.getMovieMetadata(tmdbId);
+      } else if (item.type == 'series') {
+        tmdbData = await _tmdbService.getTvMetadata(tmdbId);
         }
       }
 

@@ -997,18 +997,1323 @@ class CatalogPreferencesCompanion extends UpdateCompanion<CatalogPreference> {
   }
 }
 
+class $TraktAuthTable extends TraktAuth
+    with TableInfo<$TraktAuthTable, TraktAuthData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TraktAuthTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _accessTokenMeta =
+      const VerificationMeta('accessToken');
+  @override
+  late final GeneratedColumn<String> accessToken = GeneratedColumn<String>(
+      'access_token', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _refreshTokenMeta =
+      const VerificationMeta('refreshToken');
+  @override
+  late final GeneratedColumn<String> refreshToken = GeneratedColumn<String>(
+      'refresh_token', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _expiresInMeta =
+      const VerificationMeta('expiresIn');
+  @override
+  late final GeneratedColumn<int> expiresIn = GeneratedColumn<int>(
+      'expires_in', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _expiresAtMeta =
+      const VerificationMeta('expiresAt');
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+      'expires_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _usernameMeta =
+      const VerificationMeta('username');
+  @override
+  late final GeneratedColumn<String> username = GeneratedColumn<String>(
+      'username', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _slugMeta = const VerificationMeta('slug');
+  @override
+  late final GeneratedColumn<String> slug = GeneratedColumn<String>(
+      'slug', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        accessToken,
+        refreshToken,
+        expiresIn,
+        createdAt,
+        expiresAt,
+        username,
+        slug
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'trakt_auth';
+  @override
+  VerificationContext validateIntegrity(Insertable<TraktAuthData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('access_token')) {
+      context.handle(
+          _accessTokenMeta,
+          accessToken.isAcceptableOrUnknown(
+              data['access_token']!, _accessTokenMeta));
+    } else if (isInserting) {
+      context.missing(_accessTokenMeta);
+    }
+    if (data.containsKey('refresh_token')) {
+      context.handle(
+          _refreshTokenMeta,
+          refreshToken.isAcceptableOrUnknown(
+              data['refresh_token']!, _refreshTokenMeta));
+    } else if (isInserting) {
+      context.missing(_refreshTokenMeta);
+    }
+    if (data.containsKey('expires_in')) {
+      context.handle(_expiresInMeta,
+          expiresIn.isAcceptableOrUnknown(data['expires_in']!, _expiresInMeta));
+    } else if (isInserting) {
+      context.missing(_expiresInMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(_expiresAtMeta,
+          expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta));
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    if (data.containsKey('username')) {
+      context.handle(_usernameMeta,
+          username.isAcceptableOrUnknown(data['username']!, _usernameMeta));
+    }
+    if (data.containsKey('slug')) {
+      context.handle(
+          _slugMeta, slug.isAcceptableOrUnknown(data['slug']!, _slugMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TraktAuthData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TraktAuthData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      accessToken: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}access_token'])!,
+      refreshToken: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}refresh_token'])!,
+      expiresIn: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}expires_in'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      expiresAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}expires_at'])!,
+      username: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}username']),
+      slug: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}slug']),
+    );
+  }
+
+  @override
+  $TraktAuthTable createAlias(String alias) {
+    return $TraktAuthTable(attachedDatabase, alias);
+  }
+}
+
+class TraktAuthData extends DataClass implements Insertable<TraktAuthData> {
+  final int id;
+  final String accessToken;
+  final String refreshToken;
+  final int expiresIn;
+  final DateTime createdAt;
+  final DateTime expiresAt;
+  final String? username;
+  final String? slug;
+  const TraktAuthData(
+      {required this.id,
+      required this.accessToken,
+      required this.refreshToken,
+      required this.expiresIn,
+      required this.createdAt,
+      required this.expiresAt,
+      this.username,
+      this.slug});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['access_token'] = Variable<String>(accessToken);
+    map['refresh_token'] = Variable<String>(refreshToken);
+    map['expires_in'] = Variable<int>(expiresIn);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['expires_at'] = Variable<DateTime>(expiresAt);
+    if (!nullToAbsent || username != null) {
+      map['username'] = Variable<String>(username);
+    }
+    if (!nullToAbsent || slug != null) {
+      map['slug'] = Variable<String>(slug);
+    }
+    return map;
+  }
+
+  TraktAuthCompanion toCompanion(bool nullToAbsent) {
+    return TraktAuthCompanion(
+      id: Value(id),
+      accessToken: Value(accessToken),
+      refreshToken: Value(refreshToken),
+      expiresIn: Value(expiresIn),
+      createdAt: Value(createdAt),
+      expiresAt: Value(expiresAt),
+      username: username == null && nullToAbsent
+          ? const Value.absent()
+          : Value(username),
+      slug: slug == null && nullToAbsent ? const Value.absent() : Value(slug),
+    );
+  }
+
+  factory TraktAuthData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TraktAuthData(
+      id: serializer.fromJson<int>(json['id']),
+      accessToken: serializer.fromJson<String>(json['accessToken']),
+      refreshToken: serializer.fromJson<String>(json['refreshToken']),
+      expiresIn: serializer.fromJson<int>(json['expiresIn']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
+      username: serializer.fromJson<String?>(json['username']),
+      slug: serializer.fromJson<String?>(json['slug']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'accessToken': serializer.toJson<String>(accessToken),
+      'refreshToken': serializer.toJson<String>(refreshToken),
+      'expiresIn': serializer.toJson<int>(expiresIn),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'expiresAt': serializer.toJson<DateTime>(expiresAt),
+      'username': serializer.toJson<String?>(username),
+      'slug': serializer.toJson<String?>(slug),
+    };
+  }
+
+  TraktAuthData copyWith(
+          {int? id,
+          String? accessToken,
+          String? refreshToken,
+          int? expiresIn,
+          DateTime? createdAt,
+          DateTime? expiresAt,
+          Value<String?> username = const Value.absent(),
+          Value<String?> slug = const Value.absent()}) =>
+      TraktAuthData(
+        id: id ?? this.id,
+        accessToken: accessToken ?? this.accessToken,
+        refreshToken: refreshToken ?? this.refreshToken,
+        expiresIn: expiresIn ?? this.expiresIn,
+        createdAt: createdAt ?? this.createdAt,
+        expiresAt: expiresAt ?? this.expiresAt,
+        username: username.present ? username.value : this.username,
+        slug: slug.present ? slug.value : this.slug,
+      );
+  TraktAuthData copyWithCompanion(TraktAuthCompanion data) {
+    return TraktAuthData(
+      id: data.id.present ? data.id.value : this.id,
+      accessToken:
+          data.accessToken.present ? data.accessToken.value : this.accessToken,
+      refreshToken: data.refreshToken.present
+          ? data.refreshToken.value
+          : this.refreshToken,
+      expiresIn: data.expiresIn.present ? data.expiresIn.value : this.expiresIn,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      username: data.username.present ? data.username.value : this.username,
+      slug: data.slug.present ? data.slug.value : this.slug,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TraktAuthData(')
+          ..write('id: $id, ')
+          ..write('accessToken: $accessToken, ')
+          ..write('refreshToken: $refreshToken, ')
+          ..write('expiresIn: $expiresIn, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('username: $username, ')
+          ..write('slug: $slug')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, accessToken, refreshToken, expiresIn,
+      createdAt, expiresAt, username, slug);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TraktAuthData &&
+          other.id == this.id &&
+          other.accessToken == this.accessToken &&
+          other.refreshToken == this.refreshToken &&
+          other.expiresIn == this.expiresIn &&
+          other.createdAt == this.createdAt &&
+          other.expiresAt == this.expiresAt &&
+          other.username == this.username &&
+          other.slug == this.slug);
+}
+
+class TraktAuthCompanion extends UpdateCompanion<TraktAuthData> {
+  final Value<int> id;
+  final Value<String> accessToken;
+  final Value<String> refreshToken;
+  final Value<int> expiresIn;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> expiresAt;
+  final Value<String?> username;
+  final Value<String?> slug;
+  const TraktAuthCompanion({
+    this.id = const Value.absent(),
+    this.accessToken = const Value.absent(),
+    this.refreshToken = const Value.absent(),
+    this.expiresIn = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.username = const Value.absent(),
+    this.slug = const Value.absent(),
+  });
+  TraktAuthCompanion.insert({
+    this.id = const Value.absent(),
+    required String accessToken,
+    required String refreshToken,
+    required int expiresIn,
+    required DateTime createdAt,
+    required DateTime expiresAt,
+    this.username = const Value.absent(),
+    this.slug = const Value.absent(),
+  })  : accessToken = Value(accessToken),
+        refreshToken = Value(refreshToken),
+        expiresIn = Value(expiresIn),
+        createdAt = Value(createdAt),
+        expiresAt = Value(expiresAt);
+  static Insertable<TraktAuthData> custom({
+    Expression<int>? id,
+    Expression<String>? accessToken,
+    Expression<String>? refreshToken,
+    Expression<int>? expiresIn,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? expiresAt,
+    Expression<String>? username,
+    Expression<String>? slug,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (accessToken != null) 'access_token': accessToken,
+      if (refreshToken != null) 'refresh_token': refreshToken,
+      if (expiresIn != null) 'expires_in': expiresIn,
+      if (createdAt != null) 'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (username != null) 'username': username,
+      if (slug != null) 'slug': slug,
+    });
+  }
+
+  TraktAuthCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? accessToken,
+      Value<String>? refreshToken,
+      Value<int>? expiresIn,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? expiresAt,
+      Value<String?>? username,
+      Value<String?>? slug}) {
+    return TraktAuthCompanion(
+      id: id ?? this.id,
+      accessToken: accessToken ?? this.accessToken,
+      refreshToken: refreshToken ?? this.refreshToken,
+      expiresIn: expiresIn ?? this.expiresIn,
+      createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      username: username ?? this.username,
+      slug: slug ?? this.slug,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (accessToken.present) {
+      map['access_token'] = Variable<String>(accessToken.value);
+    }
+    if (refreshToken.present) {
+      map['refresh_token'] = Variable<String>(refreshToken.value);
+    }
+    if (expiresIn.present) {
+      map['expires_in'] = Variable<int>(expiresIn.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (username.present) {
+      map['username'] = Variable<String>(username.value);
+    }
+    if (slug.present) {
+      map['slug'] = Variable<String>(slug.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TraktAuthCompanion(')
+          ..write('id: $id, ')
+          ..write('accessToken: $accessToken, ')
+          ..write('refreshToken: $refreshToken, ')
+          ..write('expiresIn: $expiresIn, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('username: $username, ')
+          ..write('slug: $slug')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WatchHistoryTable extends WatchHistory
+    with TableInfo<$WatchHistoryTable, WatchHistoryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WatchHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _traktIdMeta =
+      const VerificationMeta('traktId');
+  @override
+  late final GeneratedColumn<String> traktId = GeneratedColumn<String>(
+      'trakt_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+      'type', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _imdbIdMeta = const VerificationMeta('imdbId');
+  @override
+  late final GeneratedColumn<String> imdbId = GeneratedColumn<String>(
+      'imdb_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _tmdbIdMeta = const VerificationMeta('tmdbId');
+  @override
+  late final GeneratedColumn<String> tmdbId = GeneratedColumn<String>(
+      'tmdb_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _seasonNumberMeta =
+      const VerificationMeta('seasonNumber');
+  @override
+  late final GeneratedColumn<int> seasonNumber = GeneratedColumn<int>(
+      'season_number', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _episodeNumberMeta =
+      const VerificationMeta('episodeNumber');
+  @override
+  late final GeneratedColumn<int> episodeNumber = GeneratedColumn<int>(
+      'episode_number', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _progressMeta =
+      const VerificationMeta('progress');
+  @override
+  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
+      'progress', aliasedName, false,
+      type: DriftSqlType.double, requiredDuringInsert: true);
+  static const VerificationMeta _watchedAtMeta =
+      const VerificationMeta('watchedAt');
+  @override
+  late final GeneratedColumn<DateTime> watchedAt = GeneratedColumn<DateTime>(
+      'watched_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _pausedAtMeta =
+      const VerificationMeta('pausedAt');
+  @override
+  late final GeneratedColumn<DateTime> pausedAt = GeneratedColumn<DateTime>(
+      'paused_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _runtimeMeta =
+      const VerificationMeta('runtime');
+  @override
+  late final GeneratedColumn<int> runtime = GeneratedColumn<int>(
+      'runtime', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _lastSyncedAtMeta =
+      const VerificationMeta('lastSyncedAt');
+  @override
+  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
+      'last_synced_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        traktId,
+        type,
+        title,
+        imdbId,
+        tmdbId,
+        seasonNumber,
+        episodeNumber,
+        progress,
+        watchedAt,
+        pausedAt,
+        runtime,
+        lastSyncedAt,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'watch_history';
+  @override
+  VerificationContext validateIntegrity(Insertable<WatchHistoryData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('trakt_id')) {
+      context.handle(_traktIdMeta,
+          traktId.isAcceptableOrUnknown(data['trakt_id']!, _traktIdMeta));
+    } else if (isInserting) {
+      context.missing(_traktIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+          _typeMeta, type.isAcceptableOrUnknown(data['type']!, _typeMeta));
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('imdb_id')) {
+      context.handle(_imdbIdMeta,
+          imdbId.isAcceptableOrUnknown(data['imdb_id']!, _imdbIdMeta));
+    }
+    if (data.containsKey('tmdb_id')) {
+      context.handle(_tmdbIdMeta,
+          tmdbId.isAcceptableOrUnknown(data['tmdb_id']!, _tmdbIdMeta));
+    }
+    if (data.containsKey('season_number')) {
+      context.handle(
+          _seasonNumberMeta,
+          seasonNumber.isAcceptableOrUnknown(
+              data['season_number']!, _seasonNumberMeta));
+    }
+    if (data.containsKey('episode_number')) {
+      context.handle(
+          _episodeNumberMeta,
+          episodeNumber.isAcceptableOrUnknown(
+              data['episode_number']!, _episodeNumberMeta));
+    }
+    if (data.containsKey('progress')) {
+      context.handle(_progressMeta,
+          progress.isAcceptableOrUnknown(data['progress']!, _progressMeta));
+    } else if (isInserting) {
+      context.missing(_progressMeta);
+    }
+    if (data.containsKey('watched_at')) {
+      context.handle(_watchedAtMeta,
+          watchedAt.isAcceptableOrUnknown(data['watched_at']!, _watchedAtMeta));
+    } else if (isInserting) {
+      context.missing(_watchedAtMeta);
+    }
+    if (data.containsKey('paused_at')) {
+      context.handle(_pausedAtMeta,
+          pausedAt.isAcceptableOrUnknown(data['paused_at']!, _pausedAtMeta));
+    }
+    if (data.containsKey('runtime')) {
+      context.handle(_runtimeMeta,
+          runtime.isAcceptableOrUnknown(data['runtime']!, _runtimeMeta));
+    }
+    if (data.containsKey('last_synced_at')) {
+      context.handle(
+          _lastSyncedAtMeta,
+          lastSyncedAt.isAcceptableOrUnknown(
+              data['last_synced_at']!, _lastSyncedAtMeta));
+    } else if (isInserting) {
+      context.missing(_lastSyncedAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {traktId};
+  @override
+  WatchHistoryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WatchHistoryData(
+      traktId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}trakt_id'])!,
+      type: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}type'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+      imdbId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}imdb_id']),
+      tmdbId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}tmdb_id']),
+      seasonNumber: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}season_number']),
+      episodeNumber: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}episode_number']),
+      progress: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}progress'])!,
+      watchedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}watched_at'])!,
+      pausedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}paused_at']),
+      runtime: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}runtime']),
+      lastSyncedAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_synced_at'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $WatchHistoryTable createAlias(String alias) {
+    return $WatchHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class WatchHistoryData extends DataClass
+    implements Insertable<WatchHistoryData> {
+  final String traktId;
+  final String type;
+  final String title;
+  final String? imdbId;
+  final String? tmdbId;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final double progress;
+  final DateTime watchedAt;
+  final DateTime? pausedAt;
+  final int? runtime;
+  final DateTime lastSyncedAt;
+  final DateTime createdAt;
+  const WatchHistoryData(
+      {required this.traktId,
+      required this.type,
+      required this.title,
+      this.imdbId,
+      this.tmdbId,
+      this.seasonNumber,
+      this.episodeNumber,
+      required this.progress,
+      required this.watchedAt,
+      this.pausedAt,
+      this.runtime,
+      required this.lastSyncedAt,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['trakt_id'] = Variable<String>(traktId);
+    map['type'] = Variable<String>(type);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || imdbId != null) {
+      map['imdb_id'] = Variable<String>(imdbId);
+    }
+    if (!nullToAbsent || tmdbId != null) {
+      map['tmdb_id'] = Variable<String>(tmdbId);
+    }
+    if (!nullToAbsent || seasonNumber != null) {
+      map['season_number'] = Variable<int>(seasonNumber);
+    }
+    if (!nullToAbsent || episodeNumber != null) {
+      map['episode_number'] = Variable<int>(episodeNumber);
+    }
+    map['progress'] = Variable<double>(progress);
+    map['watched_at'] = Variable<DateTime>(watchedAt);
+    if (!nullToAbsent || pausedAt != null) {
+      map['paused_at'] = Variable<DateTime>(pausedAt);
+    }
+    if (!nullToAbsent || runtime != null) {
+      map['runtime'] = Variable<int>(runtime);
+    }
+    map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  WatchHistoryCompanion toCompanion(bool nullToAbsent) {
+    return WatchHistoryCompanion(
+      traktId: Value(traktId),
+      type: Value(type),
+      title: Value(title),
+      imdbId:
+          imdbId == null && nullToAbsent ? const Value.absent() : Value(imdbId),
+      tmdbId:
+          tmdbId == null && nullToAbsent ? const Value.absent() : Value(tmdbId),
+      seasonNumber: seasonNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(seasonNumber),
+      episodeNumber: episodeNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(episodeNumber),
+      progress: Value(progress),
+      watchedAt: Value(watchedAt),
+      pausedAt: pausedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pausedAt),
+      runtime: runtime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runtime),
+      lastSyncedAt: Value(lastSyncedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory WatchHistoryData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WatchHistoryData(
+      traktId: serializer.fromJson<String>(json['traktId']),
+      type: serializer.fromJson<String>(json['type']),
+      title: serializer.fromJson<String>(json['title']),
+      imdbId: serializer.fromJson<String?>(json['imdbId']),
+      tmdbId: serializer.fromJson<String?>(json['tmdbId']),
+      seasonNumber: serializer.fromJson<int?>(json['seasonNumber']),
+      episodeNumber: serializer.fromJson<int?>(json['episodeNumber']),
+      progress: serializer.fromJson<double>(json['progress']),
+      watchedAt: serializer.fromJson<DateTime>(json['watchedAt']),
+      pausedAt: serializer.fromJson<DateTime?>(json['pausedAt']),
+      runtime: serializer.fromJson<int?>(json['runtime']),
+      lastSyncedAt: serializer.fromJson<DateTime>(json['lastSyncedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'traktId': serializer.toJson<String>(traktId),
+      'type': serializer.toJson<String>(type),
+      'title': serializer.toJson<String>(title),
+      'imdbId': serializer.toJson<String?>(imdbId),
+      'tmdbId': serializer.toJson<String?>(tmdbId),
+      'seasonNumber': serializer.toJson<int?>(seasonNumber),
+      'episodeNumber': serializer.toJson<int?>(episodeNumber),
+      'progress': serializer.toJson<double>(progress),
+      'watchedAt': serializer.toJson<DateTime>(watchedAt),
+      'pausedAt': serializer.toJson<DateTime?>(pausedAt),
+      'runtime': serializer.toJson<int?>(runtime),
+      'lastSyncedAt': serializer.toJson<DateTime>(lastSyncedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  WatchHistoryData copyWith(
+          {String? traktId,
+          String? type,
+          String? title,
+          Value<String?> imdbId = const Value.absent(),
+          Value<String?> tmdbId = const Value.absent(),
+          Value<int?> seasonNumber = const Value.absent(),
+          Value<int?> episodeNumber = const Value.absent(),
+          double? progress,
+          DateTime? watchedAt,
+          Value<DateTime?> pausedAt = const Value.absent(),
+          Value<int?> runtime = const Value.absent(),
+          DateTime? lastSyncedAt,
+          DateTime? createdAt}) =>
+      WatchHistoryData(
+        traktId: traktId ?? this.traktId,
+        type: type ?? this.type,
+        title: title ?? this.title,
+        imdbId: imdbId.present ? imdbId.value : this.imdbId,
+        tmdbId: tmdbId.present ? tmdbId.value : this.tmdbId,
+        seasonNumber:
+            seasonNumber.present ? seasonNumber.value : this.seasonNumber,
+        episodeNumber:
+            episodeNumber.present ? episodeNumber.value : this.episodeNumber,
+        progress: progress ?? this.progress,
+        watchedAt: watchedAt ?? this.watchedAt,
+        pausedAt: pausedAt.present ? pausedAt.value : this.pausedAt,
+        runtime: runtime.present ? runtime.value : this.runtime,
+        lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  WatchHistoryData copyWithCompanion(WatchHistoryCompanion data) {
+    return WatchHistoryData(
+      traktId: data.traktId.present ? data.traktId.value : this.traktId,
+      type: data.type.present ? data.type.value : this.type,
+      title: data.title.present ? data.title.value : this.title,
+      imdbId: data.imdbId.present ? data.imdbId.value : this.imdbId,
+      tmdbId: data.tmdbId.present ? data.tmdbId.value : this.tmdbId,
+      seasonNumber: data.seasonNumber.present
+          ? data.seasonNumber.value
+          : this.seasonNumber,
+      episodeNumber: data.episodeNumber.present
+          ? data.episodeNumber.value
+          : this.episodeNumber,
+      progress: data.progress.present ? data.progress.value : this.progress,
+      watchedAt: data.watchedAt.present ? data.watchedAt.value : this.watchedAt,
+      pausedAt: data.pausedAt.present ? data.pausedAt.value : this.pausedAt,
+      runtime: data.runtime.present ? data.runtime.value : this.runtime,
+      lastSyncedAt: data.lastSyncedAt.present
+          ? data.lastSyncedAt.value
+          : this.lastSyncedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WatchHistoryData(')
+          ..write('traktId: $traktId, ')
+          ..write('type: $type, ')
+          ..write('title: $title, ')
+          ..write('imdbId: $imdbId, ')
+          ..write('tmdbId: $tmdbId, ')
+          ..write('seasonNumber: $seasonNumber, ')
+          ..write('episodeNumber: $episodeNumber, ')
+          ..write('progress: $progress, ')
+          ..write('watchedAt: $watchedAt, ')
+          ..write('pausedAt: $pausedAt, ')
+          ..write('runtime: $runtime, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      traktId,
+      type,
+      title,
+      imdbId,
+      tmdbId,
+      seasonNumber,
+      episodeNumber,
+      progress,
+      watchedAt,
+      pausedAt,
+      runtime,
+      lastSyncedAt,
+      createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WatchHistoryData &&
+          other.traktId == this.traktId &&
+          other.type == this.type &&
+          other.title == this.title &&
+          other.imdbId == this.imdbId &&
+          other.tmdbId == this.tmdbId &&
+          other.seasonNumber == this.seasonNumber &&
+          other.episodeNumber == this.episodeNumber &&
+          other.progress == this.progress &&
+          other.watchedAt == this.watchedAt &&
+          other.pausedAt == this.pausedAt &&
+          other.runtime == this.runtime &&
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class WatchHistoryCompanion extends UpdateCompanion<WatchHistoryData> {
+  final Value<String> traktId;
+  final Value<String> type;
+  final Value<String> title;
+  final Value<String?> imdbId;
+  final Value<String?> tmdbId;
+  final Value<int?> seasonNumber;
+  final Value<int?> episodeNumber;
+  final Value<double> progress;
+  final Value<DateTime> watchedAt;
+  final Value<DateTime?> pausedAt;
+  final Value<int?> runtime;
+  final Value<DateTime> lastSyncedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const WatchHistoryCompanion({
+    this.traktId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.title = const Value.absent(),
+    this.imdbId = const Value.absent(),
+    this.tmdbId = const Value.absent(),
+    this.seasonNumber = const Value.absent(),
+    this.episodeNumber = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.watchedAt = const Value.absent(),
+    this.pausedAt = const Value.absent(),
+    this.runtime = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WatchHistoryCompanion.insert({
+    required String traktId,
+    required String type,
+    required String title,
+    this.imdbId = const Value.absent(),
+    this.tmdbId = const Value.absent(),
+    this.seasonNumber = const Value.absent(),
+    this.episodeNumber = const Value.absent(),
+    required double progress,
+    required DateTime watchedAt,
+    this.pausedAt = const Value.absent(),
+    this.runtime = const Value.absent(),
+    required DateTime lastSyncedAt,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  })  : traktId = Value(traktId),
+        type = Value(type),
+        title = Value(title),
+        progress = Value(progress),
+        watchedAt = Value(watchedAt),
+        lastSyncedAt = Value(lastSyncedAt),
+        createdAt = Value(createdAt);
+  static Insertable<WatchHistoryData> custom({
+    Expression<String>? traktId,
+    Expression<String>? type,
+    Expression<String>? title,
+    Expression<String>? imdbId,
+    Expression<String>? tmdbId,
+    Expression<int>? seasonNumber,
+    Expression<int>? episodeNumber,
+    Expression<double>? progress,
+    Expression<DateTime>? watchedAt,
+    Expression<DateTime>? pausedAt,
+    Expression<int>? runtime,
+    Expression<DateTime>? lastSyncedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (traktId != null) 'trakt_id': traktId,
+      if (type != null) 'type': type,
+      if (title != null) 'title': title,
+      if (imdbId != null) 'imdb_id': imdbId,
+      if (tmdbId != null) 'tmdb_id': tmdbId,
+      if (seasonNumber != null) 'season_number': seasonNumber,
+      if (episodeNumber != null) 'episode_number': episodeNumber,
+      if (progress != null) 'progress': progress,
+      if (watchedAt != null) 'watched_at': watchedAt,
+      if (pausedAt != null) 'paused_at': pausedAt,
+      if (runtime != null) 'runtime': runtime,
+      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WatchHistoryCompanion copyWith(
+      {Value<String>? traktId,
+      Value<String>? type,
+      Value<String>? title,
+      Value<String?>? imdbId,
+      Value<String?>? tmdbId,
+      Value<int?>? seasonNumber,
+      Value<int?>? episodeNumber,
+      Value<double>? progress,
+      Value<DateTime>? watchedAt,
+      Value<DateTime?>? pausedAt,
+      Value<int?>? runtime,
+      Value<DateTime>? lastSyncedAt,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return WatchHistoryCompanion(
+      traktId: traktId ?? this.traktId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      imdbId: imdbId ?? this.imdbId,
+      tmdbId: tmdbId ?? this.tmdbId,
+      seasonNumber: seasonNumber ?? this.seasonNumber,
+      episodeNumber: episodeNumber ?? this.episodeNumber,
+      progress: progress ?? this.progress,
+      watchedAt: watchedAt ?? this.watchedAt,
+      pausedAt: pausedAt ?? this.pausedAt,
+      runtime: runtime ?? this.runtime,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (traktId.present) {
+      map['trakt_id'] = Variable<String>(traktId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (imdbId.present) {
+      map['imdb_id'] = Variable<String>(imdbId.value);
+    }
+    if (tmdbId.present) {
+      map['tmdb_id'] = Variable<String>(tmdbId.value);
+    }
+    if (seasonNumber.present) {
+      map['season_number'] = Variable<int>(seasonNumber.value);
+    }
+    if (episodeNumber.present) {
+      map['episode_number'] = Variable<int>(episodeNumber.value);
+    }
+    if (progress.present) {
+      map['progress'] = Variable<double>(progress.value);
+    }
+    if (watchedAt.present) {
+      map['watched_at'] = Variable<DateTime>(watchedAt.value);
+    }
+    if (pausedAt.present) {
+      map['paused_at'] = Variable<DateTime>(pausedAt.value);
+    }
+    if (runtime.present) {
+      map['runtime'] = Variable<int>(runtime.value);
+    }
+    if (lastSyncedAt.present) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WatchHistoryCompanion(')
+          ..write('traktId: $traktId, ')
+          ..write('type: $type, ')
+          ..write('title: $title, ')
+          ..write('imdbId: $imdbId, ')
+          ..write('tmdbId: $tmdbId, ')
+          ..write('seasonNumber: $seasonNumber, ')
+          ..write('episodeNumber: $episodeNumber, ')
+          ..write('progress: $progress, ')
+          ..write('watchedAt: $watchedAt, ')
+          ..write('pausedAt: $pausedAt, ')
+          ..write('runtime: $runtime, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AppSettingsTable extends AppSettings
+    with TableInfo<$AppSettingsTable, AppSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AppSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+      'key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+      'value', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [key, value, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'app_settings';
+  @override
+  VerificationContext validateIntegrity(Insertable<AppSetting> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+          _keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+          _valueMeta, value.isAcceptableOrUnknown(data['value']!, _valueMeta));
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  AppSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AppSetting(
+      key: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}key'])!,
+      value: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}value'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $AppSettingsTable createAlias(String alias) {
+    return $AppSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class AppSetting extends DataClass implements Insertable<AppSetting> {
+  final String key;
+  final String value;
+  final DateTime updatedAt;
+  const AppSetting(
+      {required this.key, required this.value, required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AppSettingsCompanion toCompanion(bool nullToAbsent) {
+    return AppSettingsCompanion(
+      key: Value(key),
+      value: Value(value),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AppSetting.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AppSetting(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AppSetting copyWith({String? key, String? value, DateTime? updatedAt}) =>
+      AppSetting(
+        key: key ?? this.key,
+        value: value ?? this.value,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  AppSetting copyWithCompanion(AppSettingsCompanion data) {
+    return AppSetting(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppSetting(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AppSetting &&
+          other.key == this.key &&
+          other.value == this.value &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const AppSettingsCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AppSettingsCompanion.insert({
+    required String key,
+    required String value,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  })  : key = Value(key),
+        value = Value(value),
+        updatedAt = Value(updatedAt);
+  static Insertable<AppSetting> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AppSettingsCompanion copyWith(
+      {Value<String>? key,
+      Value<String>? value,
+      Value<DateTime>? updatedAt,
+      Value<int>? rowid}) {
+    return AppSettingsCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppSettingsCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $AddonsTable addons = $AddonsTable(this);
   late final $CatalogPreferencesTable catalogPreferences =
       $CatalogPreferencesTable(this);
+  late final $TraktAuthTable traktAuth = $TraktAuthTable(this);
+  late final $WatchHistoryTable watchHistory = $WatchHistoryTable(this);
+  late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [addons, catalogPreferences];
+      [addons, catalogPreferences, traktAuth, watchHistory, appSettings];
 }
 
 typedef $$AddonsTableCreateCompanionBuilder = AddonsCompanion Function({
@@ -1488,6 +2793,650 @@ typedef $$CatalogPreferencesTableProcessedTableManager = ProcessedTableManager<
     ),
     CatalogPreference,
     PrefetchHooks Function()>;
+typedef $$TraktAuthTableCreateCompanionBuilder = TraktAuthCompanion Function({
+  Value<int> id,
+  required String accessToken,
+  required String refreshToken,
+  required int expiresIn,
+  required DateTime createdAt,
+  required DateTime expiresAt,
+  Value<String?> username,
+  Value<String?> slug,
+});
+typedef $$TraktAuthTableUpdateCompanionBuilder = TraktAuthCompanion Function({
+  Value<int> id,
+  Value<String> accessToken,
+  Value<String> refreshToken,
+  Value<int> expiresIn,
+  Value<DateTime> createdAt,
+  Value<DateTime> expiresAt,
+  Value<String?> username,
+  Value<String?> slug,
+});
+
+class $$TraktAuthTableFilterComposer
+    extends Composer<_$AppDatabase, $TraktAuthTable> {
+  $$TraktAuthTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get accessToken => $composableBuilder(
+      column: $table.accessToken, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get refreshToken => $composableBuilder(
+      column: $table.refreshToken, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get expiresIn => $composableBuilder(
+      column: $table.expiresIn, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+      column: $table.expiresAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get username => $composableBuilder(
+      column: $table.username, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get slug => $composableBuilder(
+      column: $table.slug, builder: (column) => ColumnFilters(column));
+}
+
+class $$TraktAuthTableOrderingComposer
+    extends Composer<_$AppDatabase, $TraktAuthTable> {
+  $$TraktAuthTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get accessToken => $composableBuilder(
+      column: $table.accessToken, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get refreshToken => $composableBuilder(
+      column: $table.refreshToken,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get expiresIn => $composableBuilder(
+      column: $table.expiresIn, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+      column: $table.expiresAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get username => $composableBuilder(
+      column: $table.username, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get slug => $composableBuilder(
+      column: $table.slug, builder: (column) => ColumnOrderings(column));
+}
+
+class $$TraktAuthTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TraktAuthTable> {
+  $$TraktAuthTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get accessToken => $composableBuilder(
+      column: $table.accessToken, builder: (column) => column);
+
+  GeneratedColumn<String> get refreshToken => $composableBuilder(
+      column: $table.refreshToken, builder: (column) => column);
+
+  GeneratedColumn<int> get expiresIn =>
+      $composableBuilder(column: $table.expiresIn, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get slug =>
+      $composableBuilder(column: $table.slug, builder: (column) => column);
+}
+
+class $$TraktAuthTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $TraktAuthTable,
+    TraktAuthData,
+    $$TraktAuthTableFilterComposer,
+    $$TraktAuthTableOrderingComposer,
+    $$TraktAuthTableAnnotationComposer,
+    $$TraktAuthTableCreateCompanionBuilder,
+    $$TraktAuthTableUpdateCompanionBuilder,
+    (
+      TraktAuthData,
+      BaseReferences<_$AppDatabase, $TraktAuthTable, TraktAuthData>
+    ),
+    TraktAuthData,
+    PrefetchHooks Function()> {
+  $$TraktAuthTableTableManager(_$AppDatabase db, $TraktAuthTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TraktAuthTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TraktAuthTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TraktAuthTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> accessToken = const Value.absent(),
+            Value<String> refreshToken = const Value.absent(),
+            Value<int> expiresIn = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> expiresAt = const Value.absent(),
+            Value<String?> username = const Value.absent(),
+            Value<String?> slug = const Value.absent(),
+          }) =>
+              TraktAuthCompanion(
+            id: id,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresIn: expiresIn,
+            createdAt: createdAt,
+            expiresAt: expiresAt,
+            username: username,
+            slug: slug,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String accessToken,
+            required String refreshToken,
+            required int expiresIn,
+            required DateTime createdAt,
+            required DateTime expiresAt,
+            Value<String?> username = const Value.absent(),
+            Value<String?> slug = const Value.absent(),
+          }) =>
+              TraktAuthCompanion.insert(
+            id: id,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresIn: expiresIn,
+            createdAt: createdAt,
+            expiresAt: expiresAt,
+            username: username,
+            slug: slug,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$TraktAuthTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $TraktAuthTable,
+    TraktAuthData,
+    $$TraktAuthTableFilterComposer,
+    $$TraktAuthTableOrderingComposer,
+    $$TraktAuthTableAnnotationComposer,
+    $$TraktAuthTableCreateCompanionBuilder,
+    $$TraktAuthTableUpdateCompanionBuilder,
+    (
+      TraktAuthData,
+      BaseReferences<_$AppDatabase, $TraktAuthTable, TraktAuthData>
+    ),
+    TraktAuthData,
+    PrefetchHooks Function()>;
+typedef $$WatchHistoryTableCreateCompanionBuilder = WatchHistoryCompanion
+    Function({
+  required String traktId,
+  required String type,
+  required String title,
+  Value<String?> imdbId,
+  Value<String?> tmdbId,
+  Value<int?> seasonNumber,
+  Value<int?> episodeNumber,
+  required double progress,
+  required DateTime watchedAt,
+  Value<DateTime?> pausedAt,
+  Value<int?> runtime,
+  required DateTime lastSyncedAt,
+  required DateTime createdAt,
+  Value<int> rowid,
+});
+typedef $$WatchHistoryTableUpdateCompanionBuilder = WatchHistoryCompanion
+    Function({
+  Value<String> traktId,
+  Value<String> type,
+  Value<String> title,
+  Value<String?> imdbId,
+  Value<String?> tmdbId,
+  Value<int?> seasonNumber,
+  Value<int?> episodeNumber,
+  Value<double> progress,
+  Value<DateTime> watchedAt,
+  Value<DateTime?> pausedAt,
+  Value<int?> runtime,
+  Value<DateTime> lastSyncedAt,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$WatchHistoryTableFilterComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get traktId => $composableBuilder(
+      column: $table.traktId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get imdbId => $composableBuilder(
+      column: $table.imdbId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get tmdbId => $composableBuilder(
+      column: $table.tmdbId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get seasonNumber => $composableBuilder(
+      column: $table.seasonNumber, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get episodeNumber => $composableBuilder(
+      column: $table.episodeNumber, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get progress => $composableBuilder(
+      column: $table.progress, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get watchedAt => $composableBuilder(
+      column: $table.watchedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get pausedAt => $composableBuilder(
+      column: $table.pausedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get runtime => $composableBuilder(
+      column: $table.runtime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
+      column: $table.lastSyncedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$WatchHistoryTableOrderingComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get traktId => $composableBuilder(
+      column: $table.traktId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get imdbId => $composableBuilder(
+      column: $table.imdbId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get tmdbId => $composableBuilder(
+      column: $table.tmdbId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get seasonNumber => $composableBuilder(
+      column: $table.seasonNumber,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get episodeNumber => $composableBuilder(
+      column: $table.episodeNumber,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get progress => $composableBuilder(
+      column: $table.progress, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get watchedAt => $composableBuilder(
+      column: $table.watchedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get pausedAt => $composableBuilder(
+      column: $table.pausedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get runtime => $composableBuilder(
+      column: $table.runtime, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
+      column: $table.lastSyncedAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$WatchHistoryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get traktId =>
+      $composableBuilder(column: $table.traktId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get imdbId =>
+      $composableBuilder(column: $table.imdbId, builder: (column) => column);
+
+  GeneratedColumn<String> get tmdbId =>
+      $composableBuilder(column: $table.tmdbId, builder: (column) => column);
+
+  GeneratedColumn<int> get seasonNumber => $composableBuilder(
+      column: $table.seasonNumber, builder: (column) => column);
+
+  GeneratedColumn<int> get episodeNumber => $composableBuilder(
+      column: $table.episodeNumber, builder: (column) => column);
+
+  GeneratedColumn<double> get progress =>
+      $composableBuilder(column: $table.progress, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get watchedAt =>
+      $composableBuilder(column: $table.watchedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get pausedAt =>
+      $composableBuilder(column: $table.pausedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get runtime =>
+      $composableBuilder(column: $table.runtime, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
+      column: $table.lastSyncedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$WatchHistoryTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $WatchHistoryTable,
+    WatchHistoryData,
+    $$WatchHistoryTableFilterComposer,
+    $$WatchHistoryTableOrderingComposer,
+    $$WatchHistoryTableAnnotationComposer,
+    $$WatchHistoryTableCreateCompanionBuilder,
+    $$WatchHistoryTableUpdateCompanionBuilder,
+    (
+      WatchHistoryData,
+      BaseReferences<_$AppDatabase, $WatchHistoryTable, WatchHistoryData>
+    ),
+    WatchHistoryData,
+    PrefetchHooks Function()> {
+  $$WatchHistoryTableTableManager(_$AppDatabase db, $WatchHistoryTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WatchHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WatchHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WatchHistoryTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> traktId = const Value.absent(),
+            Value<String> type = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<String?> imdbId = const Value.absent(),
+            Value<String?> tmdbId = const Value.absent(),
+            Value<int?> seasonNumber = const Value.absent(),
+            Value<int?> episodeNumber = const Value.absent(),
+            Value<double> progress = const Value.absent(),
+            Value<DateTime> watchedAt = const Value.absent(),
+            Value<DateTime?> pausedAt = const Value.absent(),
+            Value<int?> runtime = const Value.absent(),
+            Value<DateTime> lastSyncedAt = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              WatchHistoryCompanion(
+            traktId: traktId,
+            type: type,
+            title: title,
+            imdbId: imdbId,
+            tmdbId: tmdbId,
+            seasonNumber: seasonNumber,
+            episodeNumber: episodeNumber,
+            progress: progress,
+            watchedAt: watchedAt,
+            pausedAt: pausedAt,
+            runtime: runtime,
+            lastSyncedAt: lastSyncedAt,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String traktId,
+            required String type,
+            required String title,
+            Value<String?> imdbId = const Value.absent(),
+            Value<String?> tmdbId = const Value.absent(),
+            Value<int?> seasonNumber = const Value.absent(),
+            Value<int?> episodeNumber = const Value.absent(),
+            required double progress,
+            required DateTime watchedAt,
+            Value<DateTime?> pausedAt = const Value.absent(),
+            Value<int?> runtime = const Value.absent(),
+            required DateTime lastSyncedAt,
+            required DateTime createdAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              WatchHistoryCompanion.insert(
+            traktId: traktId,
+            type: type,
+            title: title,
+            imdbId: imdbId,
+            tmdbId: tmdbId,
+            seasonNumber: seasonNumber,
+            episodeNumber: episodeNumber,
+            progress: progress,
+            watchedAt: watchedAt,
+            pausedAt: pausedAt,
+            runtime: runtime,
+            lastSyncedAt: lastSyncedAt,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$WatchHistoryTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $WatchHistoryTable,
+    WatchHistoryData,
+    $$WatchHistoryTableFilterComposer,
+    $$WatchHistoryTableOrderingComposer,
+    $$WatchHistoryTableAnnotationComposer,
+    $$WatchHistoryTableCreateCompanionBuilder,
+    $$WatchHistoryTableUpdateCompanionBuilder,
+    (
+      WatchHistoryData,
+      BaseReferences<_$AppDatabase, $WatchHistoryTable, WatchHistoryData>
+    ),
+    WatchHistoryData,
+    PrefetchHooks Function()>;
+typedef $$AppSettingsTableCreateCompanionBuilder = AppSettingsCompanion
+    Function({
+  required String key,
+  required String value,
+  required DateTime updatedAt,
+  Value<int> rowid,
+});
+typedef $$AppSettingsTableUpdateCompanionBuilder = AppSettingsCompanion
+    Function({
+  Value<String> key,
+  Value<String> value,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+
+class $$AppSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$AppSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$AppSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AppSettingsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AppSettingsTable,
+    AppSetting,
+    $$AppSettingsTableFilterComposer,
+    $$AppSettingsTableOrderingComposer,
+    $$AppSettingsTableAnnotationComposer,
+    $$AppSettingsTableCreateCompanionBuilder,
+    $$AppSettingsTableUpdateCompanionBuilder,
+    (AppSetting, BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>),
+    AppSetting,
+    PrefetchHooks Function()> {
+  $$AppSettingsTableTableManager(_$AppDatabase db, $AppSettingsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AppSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AppSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AppSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AppSettingsCompanion(
+            key: key,
+            value: value,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String key,
+            required String value,
+            required DateTime updatedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AppSettingsCompanion.insert(
+            key: key,
+            value: value,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AppSettingsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AppSettingsTable,
+    AppSetting,
+    $$AppSettingsTableFilterComposer,
+    $$AppSettingsTableOrderingComposer,
+    $$AppSettingsTableAnnotationComposer,
+    $$AppSettingsTableCreateCompanionBuilder,
+    $$AppSettingsTableUpdateCompanionBuilder,
+    (AppSetting, BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>),
+    AppSetting,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1496,4 +3445,10 @@ class $AppDatabaseManager {
       $$AddonsTableTableManager(_db, _db.addons);
   $$CatalogPreferencesTableTableManager get catalogPreferences =>
       $$CatalogPreferencesTableTableManager(_db, _db.catalogPreferences);
+  $$TraktAuthTableTableManager get traktAuth =>
+      $$TraktAuthTableTableManager(_db, _db.traktAuth);
+  $$WatchHistoryTableTableManager get watchHistory =>
+      $$WatchHistoryTableTableManager(_db, _db.watchHistory);
+  $$AppSettingsTableTableManager get appSettings =>
+      $$AppSettingsTableTableManager(_db, _db.appSettings);
 }

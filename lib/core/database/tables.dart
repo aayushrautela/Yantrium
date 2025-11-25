@@ -33,3 +33,45 @@ class CatalogPreferences extends Table {
   Set<Column> get primaryKey => {addonId, catalogType, catalogId};
 }
 
+/// Table definition for storing Trakt authentication tokens
+class TraktAuth extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get accessToken => text()();
+  TextColumn get refreshToken => text()();
+  IntColumn get expiresIn => integer()(); // Seconds until expiration
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get expiresAt => dateTime()(); // Calculated expiration time
+  TextColumn get username => text().nullable()(); // Trakt username
+  TextColumn get slug => text().nullable()(); // Trakt slug
+}
+
+/// Table definition for storing watch history from Trakt
+class WatchHistory extends Table {
+  TextColumn get traktId => text()(); // Trakt ID (e.g., "12345" for movie, "12345:1:2" for episode)
+  TextColumn get type => text()(); // "movie" or "episode"
+  TextColumn get title => text()(); // Title of the movie or episode
+  TextColumn get imdbId => text().nullable()(); // IMDb ID for matching with catalog items
+  TextColumn get tmdbId => text().nullable()(); // TMDB ID for matching with catalog items
+  IntColumn get seasonNumber => integer().nullable()(); // Season number (for episodes)
+  IntColumn get episodeNumber => integer().nullable()(); // Episode number (for episodes)
+  RealColumn get progress => real()(); // Watch progress percentage (0.0 to 100.0)
+  DateTimeColumn get watchedAt => dateTime()(); // When the item was last watched
+  DateTimeColumn get pausedAt => dateTime().nullable()(); // When playback was paused
+  IntColumn get runtime => integer().nullable()(); // Runtime in seconds
+  DateTimeColumn get lastSyncedAt => dateTime()(); // When this record was last synced from Trakt
+  DateTimeColumn get createdAt => dateTime()(); // When this record was created locally
+
+  @override
+  Set<Column> get primaryKey => {traktId};
+}
+
+/// Table definition for storing app settings
+class AppSettings extends Table {
+  TextColumn get key => text()(); // Setting key (e.g., "accent_color")
+  TextColumn get value => text()(); // Setting value (e.g., "#FF5733")
+  DateTimeColumn get updatedAt => dateTime()(); // When this setting was last updated
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+

@@ -1,0 +1,54 @@
+{
+  "app-id": "com.yantrium.Yatrium",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "24.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "yantrium",
+  "tags": [ "video", "media", "streaming" ],
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=x11",
+    "--socket=pulseaudio",
+    "--device=all",
+    "--share=ipc",
+    "--share=network",
+    "--filesystem=home",
+    "--filesystem=xdg-download",
+    "--filesystem=xdg-config",
+    "--talk-name=org.freedesktop.portal.Desktop",
+    "--env=LD_LIBRARY_PATH=/app/lib"
+  ],
+  "modules": [
+    {
+      "name": "yatrium",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/lib /app/data /app/bin /app/share/applications",
+        "cp yantrium /app/yantrium",
+        "if [ -d lib ]; then cp -r lib/* /app/lib/; fi",
+        "if [ -d data ]; then cp -r data/* /app/data/; fi",
+        "chmod +x /app/yantrium",
+        "ln -sf /app/yantrium /app/bin/yantrium",
+        "if command -v patchelf >/dev/null 2>&1; then patchelf --set-rpath /app/lib:/usr/lib:/usr/lib64 /app/yantrium 2>/dev/null || true; fi",
+        "cp com.yantrium.Yatrium.desktop /app/share/applications/",
+        "update-desktop-database /app/share/applications/ || true",
+        "echo '=== Verifying bundle structure ==='",
+        "ls -lh /app/yantrium || echo 'ERROR: yantrium not found'",
+        "ls -lh /app/lib/libapp.so || echo 'ERROR: libapp.so not found!'",
+        "ls -lh /app/lib/libflutter_linux_gtk.so || echo 'WARNING: Flutter library not found'",
+        "echo '=== Bundle verification complete ==='"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "flatpak-bundle"
+        }
+      ]
+    }
+  ]
+}
+
+
+
+
+

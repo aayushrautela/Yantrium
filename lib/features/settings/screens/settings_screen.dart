@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:io' show Platform, Process;
+import 'package:flutter/material.dart' as material;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:flutter_web_auth/flutter_web_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../addons/models/addon_config.dart';
 import '../../addons/logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';
@@ -6,6 +11,67 @@ import '../../../core/widgets/loading_indicator.dart';
 import '../../addons/screens/addon_details_screen.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../library/logic/catalog_preferences_repository.dart';
+import '../../../core/services/trakt_service.dart';
+import '../../../core/services/oauth_handler.dart';
+
+/// Check if the app is running in a Flatpak environment
+bool _isRunningInFlatpak() {
+  // Check for Flatpak environment variables (most reliable indicator)
+  final flatpakId = Platform.environment['FLATPAK_ID'];
+  if (flatpakId != null && flatpakId.isNotEmpty) {
+    return true;
+  }
+  
+  // Check if executable path is in Flatpak app directory
+  try {
+    final executable = Platform.resolvedExecutable;
+    if (executable.startsWith('/app/')) {
+      return true;
+    }
+  } catch (e) {
+    // If we can't determine, continue with other checks
+  }
+  
+  return false;
+}
+
+/// Open URL in browser, using xdg-open in Flatpak if needed
+Future<void> _openUrlInBrowser(String url) async {
+  if (_isRunningInFlatpak()) {
+    // In Flatpak, use xdg-open directly via portal
+    // Try /usr/bin/xdg-open first (standard location in Flatpak runtime)
+    try {
+      final result = await Process.run('/usr/bin/xdg-open', [url]);
+      if (result.exitCode != 0) {
+        throw 'xdg-open failed with exit code ${result.exitCode}';
+      }
+    } catch (e) {
+      // Try xdg-open from PATH as fallback
+      try {
+        final result = await Process.run('xdg-open', [url]);
+        if (result.exitCode != 0) {
+          throw 'xdg-open failed with exit code ${result.exitCode}';
+        }
+      } catch (e2) {
+        // Final fallback to url_launcher
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.platformDefault);
+        } else {
+          throw 'Could not launch $url: $e2';
+        }
+      }
+    }
+  } else {
+    // Non-Flatpak: use url_launcher
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+}
 
 /// Settings screen with all settings in a long scrolling page
 class SettingsScreen extends StatefulWidget {
@@ -19,10 +85,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final AppDatabase _database;
   late final AddonRepository _addonRepository;
   late final CatalogPreferencesRepository _catalogPreferencesRepository;
+  late final TraktService _traktService;
   List<AddonConfig> _addons = [];
   bool _isLoadingAddons = true;
   List<CatalogInfo> _catalogs = [];
   bool _isLoadingCatalogs = true;
+  bool _isTraktAuthenticated = false;
+  bool _isCheckingTraktAuth = true;
+  String? _traktUsername;
+  String? _accentColor;
+  bool _isLoadingAccentColor = true;
 
   @override
   void initState() {
@@ -30,8 +102,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _database = AppDatabase();
     _addonRepository = AddonRepository(_database);
     _catalogPreferencesRepository = CatalogPreferencesRepository(_database);
+    _traktService = TraktService(_database);
     _loadAddons();
     _loadCatalogs();
+    _checkTraktAuth();
+    _loadAccentColor();
+  }
+
+  Future<void> _loadAccentColor() async {
+    final color = await _database.getSettingValue('accent_color');
+    if (mounted) {
+      setState(() {
+        _accentColor = color ?? '#3b82f6'; // Default blue
+        _isLoadingAccentColor = false;
+      });
+    }
+  }
+
+  Future<void> _setAccentColor(String color) async {
+    await _database.setSetting('accent_color', color);
+    if (mounted) {
+      setState(() {
+        _accentColor = color;
+      });
+      // Notify the app to rebuild with new accent color
+      // This would typically be done through a state management solution
+      // For now, user needs to restart the app to see changes
+    }
   }
 
   Future<void> _loadAddons() async {
@@ -453,6 +550,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           const SizedBox(height: AppConstants.sectionSpacing),
 
+          // Accounts and API Section
+          const _SectionHeader(
+            title: 'Accounts and API',
+            icon: Icons.account_circle,
+          ),
+          Padding(
+            padding: AppConstants.contentPadding,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Trakt').h4(),
+                              const SizedBox(height: 4),
+                              if (_isCheckingTraktAuth)
+                                const Text('Checking authentication status...').muted()
+                              else if (_isTraktAuthenticated && _traktUsername != null)
+                                Text('Logged in as @$_traktUsername').muted()
+                              else if (_isTraktAuthenticated)
+                                const Text('Logged in').muted()
+                              else
+                                const Text('Not connected').muted(),
+                            ],
+                          ),
+                        ),
+                        if (_isCheckingTraktAuth)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else if (_isTraktAuthenticated)
+                          PrimaryButton(
+                            onPressed: _logoutTrakt,
+                            child: const Text('Logout'),
+                          )
+                        else
+                          Row(
+                            children: [
+                              GhostButton(
+                                onPressed: _showManualLoginDialog,
+                                child: const Text('Manual Login'),
+                              ),
+                              const SizedBox(width: 8),
+                              PrimaryButton(
+                                onPressed: _loginTrakt,
+                                child: const Text('Login'),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppConstants.sectionSpacing),
+
           // Appearance Section
           const _SectionHeader(
             title: 'Appearance',
@@ -460,7 +623,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Padding(
             padding: AppConstants.contentPadding,
-            child: const Text('Appearance settings will be available here.').muted(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Accent Color').semiBold(),
+                const SizedBox(height: 12),
+                if (_isLoadingAccentColor)
+                  const LoadingIndicator(message: 'Loading...')
+                else
+                  _AccentColorPicker(
+                    selectedColor: _accentColor ?? '#3b82f6',
+                    onColorSelected: _setAccentColor,
+                  ),
+                const SizedBox(height: 8),
+                const Text('Note: Restart the app to apply accent color changes.').muted(),
+              ],
+            ),
           ),
           const SizedBox(height: AppConstants.sectionSpacing),
 
@@ -668,6 +846,342 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _checkTraktAuth() async {
+    setState(() {
+      _isCheckingTraktAuth = true;
+    });
+
+    try {
+      final isAuthenticated = await _traktService.isAuthenticated();
+      String? username;
+      if (isAuthenticated) {
+        final user = await _traktService.getCurrentUser();
+        username = user?['username'];
+      }
+      setState(() {
+        _isTraktAuthenticated = isAuthenticated;
+        _traktUsername = username;
+        _isCheckingTraktAuth = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isTraktAuthenticated = false;
+        _traktUsername = null;
+        _isCheckingTraktAuth = false;
+      });
+    }
+  }
+
+  Future<void> _showManualLoginDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manual Login'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'If the automatic login failed, copy the authorization code or the full redirect URL from your browser and paste it here.',
+            ).muted(),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              placeholder: const Text('Paste code or URL here'),
+            ),
+            const SizedBox(height: 8),
+            GhostButton(
+              onPressed: () async {
+                final authUrl = _traktService.getAuthorizationUrl();
+                await _openUrlInBrowser(authUrl);
+              },
+              child: const Text('Open Login Page Again'),
+            ),
+          ],
+        ),
+        actions: [
+          SecondaryButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          PrimaryButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      // Parse code from URL if needed
+      String code = result.trim();
+      if (code.contains('code=')) {
+        final uri = Uri.parse(code);
+        code = uri.queryParameters['code'] ?? code;
+      } else if (code.startsWith('yantrium://')) {
+         // Handle case where it might be just the scheme part without query params parsing correctly if malformed
+         final uri = Uri.tryParse(code);
+         if (uri != null && uri.queryParameters.containsKey('code')) {
+           code = uri.queryParameters['code']!;
+         }
+      }
+
+      if (code.isNotEmpty) {
+        await _exchangeCode(code);
+      }
+    }
+  }
+
+  Future<void> _exchangeCode(String code) async {
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      final success = await _traktService.exchangeCodeForToken(code);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        if (success) {
+          showToast(
+            context: context,
+            builder: (context, overlay) => Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: const Text('Successfully logged in to Trakt'),
+              ),
+            ),
+          );
+          await _checkTraktAuth();
+        } else {
+          showToast(
+            context: context,
+            builder: (context, overlay) => Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: const Text('Failed to authenticate with Trakt. Check the code and try again.'),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Error: $e'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loginTrakt() async {
+    if (!_traktService.isConfigured) {
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: const Text(
+                'Trakt is not configured. Please add TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET to your .env file.',
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      final authUrl = _traktService.getAuthorizationUrl();
+      String? code;
+
+      // Use platform-specific OAuth flow
+      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+        // Desktop platforms: open in browser and listen for callback
+        // This works in Flatpak with proper portal permissions and URI scheme registration
+        code = await _handleDesktopOAuth(authUrl);
+      } else {
+        // Mobile platforms: use flutter_web_auth
+        try {
+          final result = await FlutterWebAuth.authenticate(
+            url: authUrl,
+            callbackUrlScheme: 'yantrium',
+          );
+          final uri = Uri.parse(result);
+          code = uri.queryParameters['code'];
+        } catch (e) {
+          // Fallback to desktop method if flutter_web_auth fails
+          code = await _handleDesktopOAuth(authUrl);
+        }
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+      }
+
+      if (code != null) {
+        // Show loading dialog again for token exchange
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final success = await _traktService.exchangeCodeForToken(code);
+
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+
+          if (success) {
+            showToast(
+              context: context,
+              builder: (context, overlay) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: const Text('Successfully logged in to Trakt'),
+                ),
+              ),
+            );
+            await _checkTraktAuth();
+          } else {
+            showToast(
+              context: context,
+              builder: (context, overlay) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: const Text('Failed to authenticate with Trakt'),
+                ),
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          showToast(
+            context: context,
+            builder: (context, overlay) => Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: const Text('OAuth authentication was cancelled or failed'),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Error logging in to Trakt: $e'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Handle OAuth flow on desktop platforms using browser + deep linking
+  Future<String?> _handleDesktopOAuth(String authUrl) async {
+    final oauthHandler = OAuthHandler();
+
+    try {
+      // Start OAuth flow using the global handler
+      final oauthFuture = oauthHandler.startOAuthFlow();
+
+      // Open the authorization URL in the default browser
+      await _openUrlInBrowser(authUrl);
+
+      // Wait for the callback (with timeout)
+      final code = await oauthFuture.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {
+          oauthHandler.cancelOAuthFlow();
+          throw 'OAuth authentication timeout. Please try again.';
+        },
+      );
+
+      return code;
+    } catch (e) {
+      oauthHandler.cancelOAuthFlow();
+      rethrow;
+    }
+  }
+
+  Future<void> _logoutTrakt() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout from Trakt'),
+        content: const Text('Are you sure you want to logout from Trakt?'),
+        actions: [
+          SecondaryButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          DestructiveButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _traktService.logout();
+      setState(() {
+        _isTraktAuthenticated = false;
+        _traktUsername = null;
+      });
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: const Text('Logged out from Trakt'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   String _capitalize(String text) {
     if (text.isEmpty) return text;
     return '${text[0].toUpperCase()}${text.substring(1)}';
@@ -705,5 +1219,89 @@ class _SectionHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Color picker widget for accent color selection
+class _AccentColorPicker extends StatelessWidget {
+  final String selectedColor;
+  final Function(String) onColorSelected;
+
+  const _AccentColorPicker({
+    required this.selectedColor,
+    required this.onColorSelected,
+  });
+
+  // Predefined accent colors
+  static const List<Map<String, String>> _colors = [
+    {'name': 'Blue', 'value': '#3b82f6'},
+    {'name': 'Purple', 'value': '#a855f7'},
+    {'name': 'Pink', 'value': '#ec4899'},
+    {'name': 'Red', 'value': '#ef4444'},
+    {'name': 'Orange', 'value': '#f97316'},
+    {'name': 'Yellow', 'value': '#eab308'},
+    {'name': 'Green', 'value': '#22c55e'},
+    {'name': 'Teal', 'value': '#14b8a6'},
+    {'name': 'Cyan', 'value': '#06b6d4'},
+    {'name': 'Indigo', 'value': '#6366f1'},
+    {'name': 'Rose', 'value': '#f43f5e'},
+    {'name': 'Amber', 'value': '#f59e0b'},
+  ];
+
+  material.Color _hexToColor(String hex) {
+    final hexCode = hex.replaceAll('#', '');
+    return material.Color(int.parse('FF$hexCode', radix: 16));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: _colors.map((colorData) {
+        final color = _hexToColor(colorData['value']!);
+        final isSelected = selectedColor.toLowerCase() == colorData['value']!.toLowerCase();
+        
+        return Clickable(
+          onPressed: () => onColorSelected(colorData['value']!),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.foreground
+                    : Theme.of(context).colorScheme.border,
+                width: isSelected ? 3 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: isSelected
+                ? Icon(
+                    Icons.check,
+                    color: _getContrastColor(color),
+                    size: 24,
+                  )
+                : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  material.Color _getContrastColor(material.Color color) {
+    // Calculate relative luminance
+    final luminance = (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
+    return luminance > 0.5 ? const material.Color(0xFF000000) : const material.Color(0xFFFFFFFF);
   }
 }

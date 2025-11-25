@@ -48,3 +48,9 @@ app.*.map.json
 
 # Test responses
 test_responses/
+
+# Flatpak build artifacts
+flatpak-bundle/
+build-dir/
+repo/
+*.flatpak

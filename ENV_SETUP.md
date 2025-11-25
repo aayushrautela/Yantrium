@@ -22,11 +22,17 @@ This application requires a TMDB (The Movie Database) API key to fetch metadata 
      TMDB_API_KEY=your_actual_api_key_here
      TMDB_BASE_URL=https://api.themoviedb.org/3
      TMDB_IMAGE_BASE_URL=https://image.tmdb.org/t/p
+
+     # Trakt API credentials (optional - for tracking watched content)
+     TRAKT_CLIENT_ID=your_trakt_client_id_here
+     TRAKT_CLIENT_SECRET=your_trakt_client_secret_here
+     TRAKT_REDIRECT_URI=yantrium://auth/trakt
      ```
 
-3. **Replace the placeholder:**
+3. **Replace the placeholders:**
    - Open `.env` file
    - Replace `your_actual_api_key_here` with your actual TMDB API key
+   - (Optional) For Trakt integration, see Trakt Setup below
 
 ## How It Works
 
@@ -34,6 +40,34 @@ This application requires a TMDB (The Movie Database) API key to fetch metadata 
 - Addons only provide content IDs (like `tmdb:123` or `tt1234567`)
 - The app automatically enriches catalog items with TMDB metadata
 - If TMDB lookup fails, the app falls back to the original addon metadata
+
+## Trakt Setup (Optional)
+
+Trakt integration allows you to track your watched movies and TV shows, sync your watchlist, and scrobble your viewing progress.
+
+1. **Get Trakt API Credentials:**
+   - Go to https://trakt.tv/oauth/applications
+   - Click "NEW APPLICATION"
+   - Fill in the application details:
+     - **Name:** Yantrium (or your preferred name)
+     - **Description:** Media streaming application
+     - **Redirect uri:** `yantrium://auth/trakt` (important!)
+     - **Permissions:** Check `/checkin` and `/scrobble`
+   - Click "SAVE APP"
+   - Copy your **Client ID** and **Client Secret**
+
+2. **Add to `.env` file:**
+   - Open `.env` file
+   - Replace `your_trakt_client_id_here` with your Trakt Client ID
+   - Replace `your_trakt_client_secret_here` with your Trakt Client Secret
+   - The `TRAKT_REDIRECT_URI` should already be set to `yantrium://auth/trakt`
+
+3. **Login to Trakt:**
+   - Open the app and go to Settings
+   - Navigate to the "Accounts and API" section
+   - Click "Login" next to Trakt
+   - Authorize the app in your browser
+   - You'll be redirected back to the app automatically
 
 ## Supported ID Formats
 

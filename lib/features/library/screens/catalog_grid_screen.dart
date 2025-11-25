@@ -2,6 +2,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter/services.dart'; // For SystemMouseCursors
 import 'package:flutter/animation.dart'; // For AnimationController
+import 'package:flutter/material.dart' as material; // For Colors, material.CircularProgressIndicator
 import 'dart:async'; // For Timer
 import '../models/catalog_item.dart';
 import '../logic/library_repository.dart';
@@ -12,6 +13,8 @@ import 'catalog_item_detail_screen.dart';
 import '../../../core/services/tmdb_service.dart';
 import '../../../core/services/tmdb_data_extractor.dart';
 import '../../../core/services/id_parser.dart';
+import '../../../core/services/watch_history_service.dart';
+import '../../../core/services/trakt_service.dart';
 
 /// Screen displaying catalogs from all enabled addons in horizontal scrolling lists
 class CatalogGridScreen extends StatefulWidget {
@@ -26,10 +29,15 @@ class CatalogGridScreen extends StatefulWidget {
 class _CatalogGridScreenState extends State<CatalogGridScreen> {
   late final AppDatabase _database;
   late final LibraryRepository _libraryRepository;
+  late final WatchHistoryService _watchHistoryService;
   List<CatalogSection> _catalogSections = [];
   bool _isLoading = true;
   String? _error;
   List<CatalogItem> _heroItems = [];
+  
+  // Continue Watching state
+  List<({CatalogItem item, double progress, int? seasonNumber, int? episodeNumber, String? episodeName})> _continueWatchingItems = [];
+  bool _isLoadingContinueWatching = false;
   
   // Search state
   late final TextEditingController _searchController;
@@ -43,8 +51,12 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     super.initState();
     _database = AppDatabase();
     _libraryRepository = LibraryRepository(_database);
+    final traktService = TraktService(_database);
+    final tmdbService = TmdbService();
+    _watchHistoryService = WatchHistoryService(_database, traktService, tmdbService);
     _searchController = widget.searchController ?? TextEditingController();
     _loadCatalogs();
+    _loadContinueWatching();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -53,6 +65,51 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       _performSearch(_searchController.text);
     });
+  }
+
+  Future<void> _loadContinueWatching() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingContinueWatching = true;
+      });
+    }
+
+    try {
+      // First, sync watch history from Trakt
+      await _watchHistoryService.syncWatchHistory();
+      
+      // Get continue watching items (0-80% progress)
+      final historyItems = await _watchHistoryService.getContinueWatching();
+      
+      // Convert watch history to catalog items with progress
+      final catalogItems = <({CatalogItem item, double progress, int? seasonNumber, int? episodeNumber, String? episodeName})>[];
+      for (final history in historyItems) {
+        final catalogItem = await _watchHistoryService.watchHistoryToCatalogItem(history);
+        if (catalogItem != null) {
+          catalogItems.add((
+            item: catalogItem, 
+            progress: history.progress,
+            seasonNumber: history.seasonNumber,
+            episodeNumber: history.episodeNumber,
+            episodeName: history.type == 'episode' ? history.title : null,
+          ));
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _continueWatchingItems = catalogItems;
+          _isLoadingContinueWatching = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading continue watching: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingContinueWatching = false;
+        });
+      }
+    }
   }
 
   Future<void> _performSearch(String query) async {
@@ -220,12 +277,23 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     }
 
     return RefreshTrigger(
-      onRefresh: _loadCatalogs,
+      onRefresh: () async {
+        await _loadCatalogs();
+        await _loadContinueWatching();
+      },
       child: CustomScrollView(
         slivers: [
           // Hero Section
           if (_heroItems.isNotEmpty)
             _HeroSection(items: _heroItems),
+          
+          // Continue Watching Section
+          if (_continueWatchingItems.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _ContinueWatchingSection(
+                items: _continueWatchingItems,
+              ),
+            ),
           
           // Catalog Sections
           SliverList(
@@ -296,7 +364,7 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
         // Results
         Expanded(
           child: _isSearching
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: material.CircularProgressIndicator())
               : filteredResults.isEmpty
                   ? Center(
                       child: Column(
@@ -533,7 +601,7 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                                 height: widget.cardWidth * 1.5,
                                 color: Theme.of(context).colorScheme.muted,
                                 child: const Center(
-                                    child: CircularProgressIndicator()),
+                                    child: material.CircularProgressIndicator()),
                               );
                             },
                           )
@@ -1118,7 +1186,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                               return const SizedBox(
                                 width: 800,
                                 height: 300,
-                                child: Center(child: CircularProgressIndicator()),
+                                child: Center(child: material.CircularProgressIndicator()),
                               );
                             },
                           ),
@@ -1487,7 +1555,7 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                               width: 240,
                               height: 360,
                               color: Theme.of(context).colorScheme.muted,
-                              child: const Center(child: CircularProgressIndicator()),
+                              child: const Center(child: material.CircularProgressIndicator()),
                             );
                           },
                         )
@@ -1513,6 +1581,33 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                                   height: 1.2,
                                 ),
                               ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Play button overlay (shown on hover)
+                      AnimatedOpacity(
+                        opacity: _isHovered ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Center(
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: material.Colors.black.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.play_arrow,
+                              size: 40,
+                              color: Theme.of(context).colorScheme.primaryForeground,
                             ),
                           ),
                         ),
@@ -1574,6 +1669,382 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                 ).semiBold(),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Special section for Continue Watching with landscape cards
+class _ContinueWatchingSection extends StatefulWidget {
+  final List<({CatalogItem item, double progress, int? seasonNumber, int? episodeNumber, String? episodeName})> items;
+
+  const _ContinueWatchingSection({required this.items});
+
+  @override
+  State<_ContinueWatchingSection> createState() => _ContinueWatchingSectionState();
+}
+
+class _ContinueWatchingSectionState extends State<_ContinueWatchingSection> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollLeft() {
+    _scrollController.animateTo(
+      _scrollController.offset - 700, // Card width + spacing
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _scrollRight() {
+    _scrollController.animateTo(
+      _scrollController.offset + 700,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: AppConstants.sectionHeaderPadding,
+          child: Row(
+            children: [
+              const Icon(Icons.access_time, size: 20),
+              const SizedBox(width: 8),
+              const Text('Continue Watching').h4(),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 270, // Height for landscape cards (16:9 ratio, 480x270)
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: AppConstants.horizontalMargin,
+                  right: AppConstants.horizontalMargin,
+                ),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: widget.items.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 24),
+                      child: _ContinueWatchingCard(
+                        item: widget.items[index].item,
+                        progress: widget.items[index].progress,
+                        seasonNumber: widget.items[index].seasonNumber,
+                        episodeNumber: widget.items[index].episodeNumber,
+                        episodeName: widget.items[index].episodeName,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Left button
+              Positioned(
+                left: AppConstants.horizontalMargin - 40,
+                top: 135 - 20, // Center of card (270/2 = 135)
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Clickable(
+                    onPressed: _scrollLeft,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.border,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.chevron_left,
+                        color: Theme.of(context).colorScheme.foreground,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Right button
+              Positioned(
+                right: AppConstants.horizontalMargin - 40,
+                top: 135 - 20, // Center of card (270/2 = 135)
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Clickable(
+                    onPressed: _scrollRight,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.border,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(context).colorScheme.foreground,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppConstants.sectionSpacing),
+      ],
+    );
+  }
+}
+
+/// Landscape card for Continue Watching items
+class _ContinueWatchingCard extends StatefulWidget {
+  final CatalogItem item;
+  final double progress;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final String? episodeName;
+
+  const _ContinueWatchingCard({
+    required this.item,
+    required this.progress,
+    this.seasonNumber,
+    this.episodeNumber,
+    this.episodeName,
+  });
+
+  @override
+  State<_ContinueWatchingCard> createState() => _ContinueWatchingCardState();
+}
+
+class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Clickable(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => CatalogItemDetailScreen(
+                item: widget.item,
+              ),
+            ),
+          );
+        },
+        child: SizedBox(
+          width: 480, // Landscape 16:9 ratio
+          height: 270,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Backdrop image
+                AnimatedScale(
+                  scale: _isHovered ? 1.05 : 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: widget.item.background != null
+                      ? Image.network(
+                          widget.item.background!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Theme.of(context).colorScheme.muted,
+                            child: Center(
+                              child: Text(
+                                widget.item.name,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.foreground,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Theme.of(context).colorScheme.muted,
+                              child: const Center(child: material.CircularProgressIndicator()),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Theme.of(context).colorScheme.muted,
+                          child: Center(
+                            child: Text(
+                              widget.item.name,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.foreground,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+                // Gradient overlay for better logo/text visibility in bottom left corner
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.bottomLeft,
+                          radius: 1.6,
+                          colors: [
+                            material.Colors.black.withOpacity(0.85),
+                            material.Colors.black.withOpacity(0.5),
+                            material.Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.35, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Logo overlay (bottom left) - replaced by episode info on hover
+                // Use fixed-size container to prevent layout shifts
+                Positioned(
+                  bottom: 22, // 16px padding + 6px progress bar
+                  left: 16,
+                  child: SizedBox(
+                    width: 240, // Fixed width to prevent shifting
+                    height: 80, // Fixed height to prevent shifting
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      switchInCurve: Curves.easeInOut,
+                      switchOutCurve: Curves.easeInOut,
+                      child: _isHovered && widget.item.type == 'series' && (widget.episodeName != null || widget.seasonNumber != null || widget.episodeNumber != null)
+                          ? // Show episode info on hover
+                            Align(
+                              key: const ValueKey('episode-info'),
+                              alignment: Alignment.bottomLeft,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (widget.episodeName != null && widget.episodeName!.isNotEmpty)
+                                    Text(
+                                      widget.episodeName!,
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.foreground,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (widget.seasonNumber != null && widget.episodeNumber != null) ...[
+                                    if (widget.episodeName != null && widget.episodeName!.isNotEmpty)
+                                      const SizedBox(height: 4),
+                                    Text(
+                                      'S${widget.seasonNumber.toString().padLeft(2, '0')}E${widget.episodeNumber.toString().padLeft(2, '0')}',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.foreground.withOpacity(0.8),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            )
+                          : // Show logo when not hovered or not a series
+                            widget.item.logo != null && widget.item.logo!.isNotEmpty
+                                ? Align(
+                                    key: const ValueKey('logo'),
+                                    alignment: Alignment.bottomLeft,
+                                    child: Image.network(
+                                      widget.item.logo!,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return const SizedBox.shrink();
+                                      },
+                                    ),
+                                  )
+                                : const SizedBox.shrink(key: ValueKey('empty')),
+                    ),
+                  ),
+                ),
+                // Play button overlay (shown on hover)
+                AnimatedOpacity(
+                  opacity: _isHovered ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Center(
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                        boxShadow: [
+                          BoxShadow(
+                            color: material.Colors.black.withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.play_arrow,
+                        size: 40,
+                        color: Theme.of(context).colorScheme.primaryForeground,
+                      ),
+                    ),
+                  ),
+                ),
+                // Progress bar at the bottom
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: material.Colors.black.withOpacity(0.5),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: widget.progress / 100.0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

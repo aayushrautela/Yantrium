@@ -7,12 +7,12 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Addons, CatalogPreferences])
+@DriftDatabase(tables: [Addons, CatalogPreferences, TraktAuth, WatchHistory, AppSettings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -20,6 +20,15 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (migrator, from, to) async {
         if (from < 2) {
           await migrator.createTable(catalogPreferences);
+        }
+        if (from < 3) {
+          await migrator.createTable(traktAuth);
+        }
+        if (from < 4) {
+          await migrator.createTable(watchHistory);
+        }
+        if (from < 5) {
+          await migrator.createTable(appSettings);
         }
       },
     );
@@ -140,6 +149,76 @@ class AppDatabase extends _$AppDatabase {
     
     return await query.write(CatalogPreferencesCompanion(isHeroSource: Value(false)));
   }
+
+  // Trakt Auth DAO methods
+  Future<TraktAuthData?> getTraktAuth() => 
+      (select(traktAuth)..orderBy([(t) => OrderingTerm.desc(t.id)]))
+          .getSingleOrNull();
+  
+  Future<int> upsertTraktAuth(TraktAuthCompanion auth) async {
+    // Since we only store one auth, delete existing and insert new
+    await deleteTraktAuth();
+    return await into(traktAuth).insert(auth);
+  }
+  
+  Future<int> deleteTraktAuth() => delete(traktAuth).go();
+
+  // Watch History DAO methods
+  Future<List<WatchHistoryData>> getAllWatchHistory() => 
+      (select(watchHistory)..orderBy([(t) => OrderingTerm.desc(t.watchedAt)])).get();
+  
+  Future<List<WatchHistoryData>> getContinueWatching({double minProgress = 0.0, double maxProgress = 80.0}) =>
+      (select(watchHistory)
+        ..where((t) => t.progress.isBiggerOrEqualValue(minProgress))
+        ..where((t) => t.progress.isSmallerOrEqualValue(maxProgress))
+        ..orderBy([(t) => OrderingTerm.desc(t.watchedAt)]))
+      .get();
+  
+  Future<WatchHistoryData?> getWatchHistoryByTraktId(String traktId) =>
+      (select(watchHistory)..where((t) => t.traktId.equals(traktId))).getSingleOrNull();
+  
+  Future<WatchHistoryData?> getWatchHistoryByImdbId(String imdbId) =>
+      (select(watchHistory)..where((t) => t.imdbId.equals(imdbId))).getSingleOrNull();
+  
+  Future<int> upsertWatchHistory(WatchHistoryCompanion history) async {
+    return await into(watchHistory).insertOnConflictUpdate(history);
+  }
+  
+  Future<int> updateWatchProgress(String traktId, double progress, {DateTime? pausedAt}) async {
+    return await (update(watchHistory)..where((t) => t.traktId.equals(traktId)))
+        .write(WatchHistoryCompanion(
+          progress: Value(progress),
+          pausedAt: pausedAt != null ? Value(pausedAt) : const Value.absent(),
+          watchedAt: Value(DateTime.now()),
+        ));
+  }
+  
+  Future<int> deleteWatchHistory(String traktId) =>
+      (delete(watchHistory)..where((t) => t.traktId.equals(traktId))).go();
+  
+  Future<int> clearWatchHistory() => delete(watchHistory).go();
+
+  // App Settings DAO methods
+  Future<AppSetting?> getSetting(String key) =>
+      (select(appSettings)..where((t) => t.key.equals(key))).getSingleOrNull();
+  
+  Future<String?> getSettingValue(String key) async {
+    final setting = await getSetting(key);
+    return setting?.value;
+  }
+  
+  Future<int> setSetting(String key, String value) async {
+    return await into(appSettings).insertOnConflictUpdate(
+      AppSettingsCompanion.insert(
+        key: key,
+        value: value,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+  
+  Future<int> deleteSetting(String key) =>
+      (delete(appSettings)..where((t) => t.key.equals(key))).go();
 }
 
 LazyDatabase _openConnection() {

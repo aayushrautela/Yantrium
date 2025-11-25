@@ -72,7 +72,7 @@ class TmdbService {
   /// Fetch movie metadata from TMDB (with caching)
   Future<Map<String, dynamic>?> getMovieMetadata(int tmdbId) async {
     final cacheKey = 'movie_$tmdbId';
-
+    
     // Check cache first
     final cached = _cache[cacheKey];
     if (cached != null && !cached.isExpired) {
@@ -82,8 +82,8 @@ class TmdbService {
                             (cached.data['external_ids'] as Map<String, dynamic>?)?.containsKey('imdb_id') == true;
 
       if (hasExternalIds) {
-        debugPrint('[CACHE] Using cached movie metadata for TMDB ID: $tmdbId');
-        return Map<String, dynamic>.from(cached.data);
+      debugPrint('[CACHE] Using cached movie metadata for TMDB ID: $tmdbId');
+      return Map<String, dynamic>.from(cached.data);
       } else {
         debugPrint('[CACHE] Cached movie metadata missing external_ids, forcing refresh for TMDB ID: $tmdbId');
         // Remove expired/invalid cache entry
@@ -118,7 +118,7 @@ class TmdbService {
   /// Fetch TV series metadata from TMDB (with caching)
   Future<Map<String, dynamic>?> getTvMetadata(int tmdbId) async {
     final cacheKey = 'tv_$tmdbId';
-
+    
     // Check cache first
     final cached = _cache[cacheKey];
     if (cached != null && !cached.isExpired) {
@@ -128,8 +128,8 @@ class TmdbService {
                             (cached.data['external_ids'] as Map<String, dynamic>?)?.containsKey('imdb_id') == true;
 
       if (hasExternalIds) {
-        debugPrint('[CACHE] Using cached TV metadata for TMDB ID: $tmdbId');
-        return Map<String, dynamic>.from(cached.data);
+      debugPrint('[CACHE] Using cached TV metadata for TMDB ID: $tmdbId');
+      return Map<String, dynamic>.from(cached.data);
       } else {
         debugPrint('[CACHE] Cached TV metadata missing external_ids, forcing refresh for TMDB ID: $tmdbId');
         // Remove expired/invalid cache entry
