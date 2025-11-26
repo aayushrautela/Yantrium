@@ -57,7 +57,10 @@ class _HomeScreenState extends State<HomeScreen> {
           searchController: _searchController, // Always available for global search
         ),
       ],
-      child: _screens[_currentIndex],
+      child: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
     );
   }
 }

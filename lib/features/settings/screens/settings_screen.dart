@@ -14,6 +14,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../library/logic/catalog_preferences_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/oauth_handler.dart';
+import '../../../core/services/theme_service.dart';
 
 /// Check if the app is running in a Flatpak environment
 bool _isRunningInFlatpak() {
@@ -119,14 +120,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _setAccentColor(String color) async {
-    await _database.setSetting('accent_color', color);
+    // Use theme service to update accent color, which will trigger app rebuild
+    await ThemeService().setAccentColorByHex(color);
     if (mounted) {
       setState(() {
         _accentColor = color;
       });
-      // Notify the app to rebuild with new accent color
-      // This would typically be done through a state management solution
-      // For now, user needs to restart the app to see changes
     }
   }
 
@@ -629,7 +628,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onColorSelected: _setAccentColor,
                   ),
                 const SizedBox(height: 8),
-                const Text('Note: Restart the app to apply accent color changes.').muted(),
+                const Text('Accent color changes apply immediately.').muted(),
               ],
             ),
           ),

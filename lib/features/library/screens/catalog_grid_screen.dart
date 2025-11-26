@@ -8,7 +8,6 @@ import '../models/catalog_item.dart';
 import '../logic/library_repository.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
-import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/constants/app_constants.dart';
 import 'catalog_item_detail_screen.dart';
 import '../../../core/services/tmdb_service.dart';
@@ -30,7 +29,10 @@ class CatalogGridScreen extends StatefulWidget {
   State<CatalogGridScreen> createState() => _CatalogGridScreenState();
 }
 
-class _CatalogGridScreenState extends State<CatalogGridScreen> {
+class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true; // Keep this screen alive in memory
+
   late final AppDatabase _database;
   late final LibraryRepository _libraryRepository;
   late final WatchHistoryService _watchHistoryService;
@@ -39,10 +41,16 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   bool _areCatalogsLoaded = false; // Track if catalogs are loaded (for hero navigation blocking)
   String? _error;
   List<CatalogItem> _heroItems = [];
-  
+
   // Continue Watching state
   List<({CatalogItem item, double progress, int? seasonNumber, int? episodeNumber, String? episodeName})> _continueWatchingItems = [];
   bool _isLoadingContinueWatching = false;
+
+  // Caching and background refresh
+  bool _hasLoadedInitialData = false;
+  DateTime? _lastLoadTime;
+  Timer? _backgroundRefreshTimer;
+  bool _isBackgroundRefreshing = false;
   
   // Search state
   late final TextEditingController _searchController;
@@ -54,14 +62,25 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   @override
   void initState() {
     super.initState();
+
     _database = DatabaseProvider.instance;
     _libraryRepository = LibraryRepository(_database);
     _watchHistoryService = WatchHistoryService(_database);
     _searchController = widget.searchController ?? TextEditingController();
-    _loadCatalogs();
-    _loadContinueWatching();
+
+    // Only load data if we haven't loaded it before or it's stale
+    final shouldLoad = !_hasLoadedInitialData || _shouldRefreshData();
+
+    if (shouldLoad) {
+      _loadCatalogs();
+      _loadContinueWatching();
+    }
+
+    // Start background refresh timer (every 30 minutes)
+    _startBackgroundRefreshTimer();
+
     _searchController.addListener(_onSearchChanged);
-    
+
     // Perform initial search if controller has text
     if (_searchController.text.isNotEmpty) {
       _performSearch(_searchController.text);
@@ -75,8 +94,8 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     });
   }
 
-  Future<void> _loadContinueWatching() async {
-    if (mounted) {
+  Future<void> _loadContinueWatching({bool isBackgroundRefresh = false}) async {
+    if (!isBackgroundRefresh && mounted) {
       setState(() {
         _isLoadingContinueWatching = true;
       });
@@ -91,18 +110,18 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
       } else {
         debugPrint('Trakt not authenticated, using local continue watching data');
       }
-      
+
       // Get continue watching items (0-80% progress) from local database
       // This works for both Trakt-synced and local-only items
       final historyItems = await _watchHistoryService.getContinueWatching();
-      
+
       // Convert watch history to catalog items with progress
       final catalogItems = <({CatalogItem item, double progress, int? seasonNumber, int? episodeNumber, String? episodeName})>[];
       for (final history in historyItems) {
         final catalogItem = await _watchHistoryService.watchHistoryToCatalogItem(history);
         if (catalogItem != null) {
           catalogItems.add((
-            item: catalogItem, 
+            item: catalogItem,
             progress: history.progress,
             seasonNumber: history.seasonNumber,
             episodeNumber: history.episodeNumber,
@@ -114,12 +133,14 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
       if (mounted) {
         setState(() {
           _continueWatchingItems = catalogItems;
-          _isLoadingContinueWatching = false;
+          if (!isBackgroundRefresh) {
+            _isLoadingContinueWatching = false;
+          }
         });
       }
     } catch (e) {
       debugPrint('Error loading continue watching: $e');
-      if (mounted) {
+      if (mounted && !isBackgroundRefresh) {
         setState(() {
           _isLoadingContinueWatching = false;
         });
@@ -203,40 +224,54 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     return genres.toList()..sort();
   }
 
-  Future<void> _loadCatalogs() async {
+  Future<void> _loadCatalogs({bool isBackgroundRefresh = false}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _areCatalogsLoaded = false;
-      _error = null;
-    });
+
+    if (!isBackgroundRefresh) {
+      setState(() {
+        _isLoading = true;
+        _areCatalogsLoaded = false;
+        _error = null;
+      });
+    }
 
     try {
       // Load catalogs first (fast operation)
       final sections = await _libraryRepository.getCatalogSections();
       if (!mounted) return;
-      
+
       // Load only first hero item initially (fast)
       final heroItems = await _libraryRepository.getHeroItems(initialEnrichCount: 1);
-      
-      // Show catalogs immediately
+
+      if (!mounted) return;
+
+      // Update state
       setState(() {
         _catalogSections = sections;
         _heroItems = heroItems;
-        _isLoading = false;
-        _areCatalogsLoaded = true; // Enable hero navigation after catalogs load
+        if (!isBackgroundRefresh) {
+          _isLoading = false;
+          _areCatalogsLoaded = true; // Enable hero navigation after catalogs load
+          _hasLoadedInitialData = true;
+          _lastLoadTime = DateTime.now();
+        }
       });
-      
-      // Enrich remaining hero items in background
-      _loadRemainingHeroItems();
-      
+
+      // Enrich remaining hero items in background (only for initial load)
+      if (!isBackgroundRefresh) {
+        _loadRemainingHeroItems();
+      }
+
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-        _areCatalogsLoaded = true; // Still enable navigation even on error
-      });
+      if (!isBackgroundRefresh) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+          _areCatalogsLoaded = true; // Still enable navigation even on error
+        });
+      }
+      debugPrint('Catalog loading failed: $e');
     }
   }
 
@@ -258,8 +293,35 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     if (_isLoading) {
-      return const LoadingIndicator(message: 'Loading catalogs...');
+      // Show skeleton placeholders while loading
+      return RefreshTrigger(
+        onRefresh: () async {
+          // Don't allow refresh while initially loading
+        },
+        child: CustomScrollView(
+          slivers: [
+            // Hero Section Skeleton
+            const _HeroSectionSkeleton(),
+
+            // Continue Watching Section Skeleton
+            const _ContinueWatchingSectionSkeleton(),
+
+            // Catalog Sections Skeleton
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final titles = ['Popular Movies', 'Trending TV Shows', 'New Releases', 'Top Rated'];
+                  return _CatalogSectionSkeleton(title: titles[index % titles.length]);
+                },
+                childCount: 3, // Show 3 skeleton sections
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_error != null) {
@@ -318,6 +380,9 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
 
     return RefreshTrigger(
       onRefresh: () async {
+        // Force refresh by resetting cache flags
+        _hasLoadedInitialData = false;
+        _lastLoadTime = null;
         await _loadCatalogs();
         await _loadContinueWatching();
       },
@@ -505,9 +570,39 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     );
   }
 
+  /// Check if data should be refreshed (older than 30 minutes)
+  bool _shouldRefreshData() {
+    return _lastLoadTime == null ||
+           DateTime.now().difference(_lastLoadTime!) > const Duration(minutes: 30);
+  }
+
+  /// Start periodic background refresh timer
+  void _startBackgroundRefreshTimer() {
+    _backgroundRefreshTimer?.cancel();
+    _backgroundRefreshTimer = Timer.periodic(const Duration(minutes: 30), (timer) {
+      if (mounted && !_isLoading && !_isBackgroundRefreshing) {
+        _performBackgroundRefresh();
+      }
+    });
+  }
+
+  /// Perform background refresh without showing loading UI
+  Future<void> _performBackgroundRefresh() async {
+    _isBackgroundRefreshing = true;
+    try {
+      await _loadCatalogs(isBackgroundRefresh: true);
+      await _loadContinueWatching(isBackgroundRefresh: true);
+    } catch (e) {
+      debugPrint('Background refresh failed: $e');
+    } finally {
+      _isBackgroundRefreshing = false;
+    }
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _backgroundRefreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     // Only dispose if we created it (not passed from parent)
     if (widget.searchController == null) {
@@ -1499,6 +1594,361 @@ class _CatalogSectionState extends State<_CatalogSection> {
           ),
         ),
         const SizedBox(height: AppConstants.sectionSpacing),
+      ],
+    );
+  }
+}
+
+/// Skeleton placeholder for catalog item cards
+class _CatalogItemCardSkeleton extends StatelessWidget {
+  const _CatalogItemCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 240,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Image skeleton with rounded corners
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 240,
+              height: 360,
+              color: Theme.of(context).colorScheme.muted,
+            ).asSkeleton(),
+          ),
+
+          // Text below the image
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 240,
+            child: Column(
+              children: [
+                // Title skeleton - two lines
+                Container(
+                  height: 16,
+                  width: 200,
+                  color: Theme.of(context).colorScheme.muted,
+                ).asSkeleton(),
+                const SizedBox(height: 4),
+                Container(
+                  height: 16,
+                  width: 150,
+                  color: Theme.of(context).colorScheme.muted,
+                ).asSkeleton(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton placeholder for hero section
+class _HeroSectionSkeleton extends StatelessWidget {
+  const _HeroSectionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: SizedBox(
+        width: double.infinity,
+        height: 700,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Background skeleton
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Theme.of(context).colorScheme.muted,
+            ).asSkeleton(),
+
+            // Overlay content skeleton
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.7),
+                  ],
+                ),
+              ),
+              padding: AppConstants.horizontalPadding.copyWith(
+                top: 100,
+                bottom: 60,
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Main content column (title, description, buttons)
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title skeleton
+                      Container(
+                        height: 48,
+                        width: 400,
+                        color: Colors.white.withOpacity(0.9),
+                      ).asSkeleton(),
+                      const SizedBox(height: 16),
+
+                      // Description skeleton
+                      Container(
+                        height: 20,
+                        width: 600,
+                        color: Colors.white.withOpacity(0.7),
+                      ).asSkeleton(),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 20,
+                        width: 500,
+                        color: Colors.white.withOpacity(0.7),
+                      ).asSkeleton(),
+                      const SizedBox(height: 24),
+
+                      // Buttons skeleton
+                      Row(
+                        children: [
+                          Container(
+                            height: 48,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ).asSkeleton(),
+                          const SizedBox(width: 16),
+                          Container(
+                            height: 48,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ).asSkeleton(),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Logo skeleton (bottom left corner)
+                  Positioned(
+                    bottom: 20,
+                    left: 0,
+                    child: Container(
+                      width: 200,
+                      height: 60,
+                      color: Colors.white.withOpacity(0.8),
+                    ).asSkeleton(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Indicators at bottom
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  5,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.54),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton placeholder for continue watching section
+class _ContinueWatchingSectionSkeleton extends StatelessWidget {
+  const _ContinueWatchingSectionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: AppConstants.sectionHeaderPadding,
+            child: Row(
+              children: [
+                const Icon(Icons.play_circle_outline, size: 20),
+                const SizedBox(width: 8),
+                Container(
+                  height: 20,
+                  width: 160,
+                  color: Theme.of(context).colorScheme.muted,
+                ).asSkeleton(),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 200,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: AppConstants.horizontalMargin,
+                right: AppConstants.horizontalMargin,
+              ),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: 4,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Container(
+                      width: 320,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.muted,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Background image skeleton
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: Theme.of(context).colorScheme.muted,
+                            ),
+                          ).asSkeleton(),
+
+                          // Progress bar at bottom
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(8),
+                                  bottomRight: Radius.circular(8),
+                                ),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: 0.6,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    borderRadius: const BorderRadius.only(
+                                      bottomLeft: Radius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // Play button overlay
+                          Center(
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                              ),
+                              child: Icon(
+                                Icons.play_arrow,
+                                color: Theme.of(context).colorScheme.primaryForeground,
+                              ),
+                            ),
+                          ),
+
+                          // Title overlay
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            right: 12,
+                            child: Container(
+                              height: 16,
+                              width: 200,
+                              color: Colors.white.withOpacity(0.9),
+                            ).asSkeleton(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton placeholder for catalog sections
+class _CatalogSectionSkeleton extends StatelessWidget {
+  final String title;
+
+  const _CatalogSectionSkeleton({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: AppConstants.sectionHeaderPadding,
+          child: Row(
+            children: [
+              const Icon(Icons.access_time, size: 20),
+              const SizedBox(width: 8),
+              Container(
+                height: 20,
+                width: 120,
+                color: Theme.of(context).colorScheme.muted,
+              ).asSkeleton(),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 440,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppConstants.horizontalMargin,
+              right: AppConstants.horizontalMargin,
+            ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: 6, // Show 6 skeleton cards
+              itemBuilder: (context, index) {
+                return const Padding(
+                  padding: EdgeInsets.only(right: 24),
+                  child: _CatalogItemCardSkeleton(),
+                );
+              },
+            ),
+          ),
+        ),
       ],
     );
   }
