@@ -29,6 +29,16 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
+    - name: Create .env file
+      run: |
+        echo "TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}" > .env
+        echo "TMDB_BASE_URL=https://api.themoviedb.org/3" >> .env
+        echo "TMDB_IMAGE_BASE_URL=https://image.tmdb.org/t/p" >> .env
+        echo "TRAKT_CLIENT_ID=${{ secrets.TRAKT_CLIENT_ID }}" >> .env
+        echo "TRAKT_CLIENT_SECRET=${{ secrets.TRAKT_CLIENT_SECRET }}" >> .env
+        echo "TRAKT_REDIRECT_URI=yantrium://auth/trakt" >> .env
+      shell: bash
+
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
 
