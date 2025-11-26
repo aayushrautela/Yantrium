@@ -94,6 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isTraktAuthenticated = false;
   bool _isCheckingTraktAuth = true;
   String? _traktUsername;
+  bool _isSyncingWatchHistory = false;
   String? _accentColor;
   bool _isLoadingAccentColor = true;
 
@@ -581,9 +582,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         else if (_isTraktAuthenticated)
-                          PrimaryButton(
-                            onPressed: _logoutTrakt,
-                            child: const Text('Logout'),
+                          Row(
+                            children: [
+                              GhostButton(
+                                onPressed: _syncWatchHistory,
+                                child: _isSyncingWatchHistory
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Text('Sync Watch History'),
+                              ),
+                              const SizedBox(width: 8),
+                              PrimaryButton(
+                                onPressed: _logoutTrakt,
+                                child: const Text('Logout'),
+                              ),
+                            ],
                           )
                         else
                           Row(
@@ -1169,6 +1185,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _syncWatchHistory() async {
+    if (!_isTraktAuthenticated) {
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: const Text('You must be logged in to Trakt to sync watch history'),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isSyncingWatchHistory = true;
+    });
+
+    try {
+      final watchHistoryService = ServiceLocator.instance.watchHistoryService;
+      final syncedCount = await watchHistoryService.syncWatchHistory(forceRefresh: true);
+
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Successfully synced $syncedCount watch history items from Trakt'),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Failed to sync watch history: $e'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncingWatchHistory = false;
+        });
       }
     }
   }

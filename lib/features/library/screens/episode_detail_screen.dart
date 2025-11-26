@@ -986,6 +986,59 @@ class _EpisodeCard extends StatefulWidget {
 
 class _EpisodeCardState extends State<_EpisodeCard> {
   bool _isHovered = false;
+  bool _isWatched = false;
+  late final AppDatabase _database;
+
+  @override
+  void initState() {
+    super.initState();
+    _database = DatabaseProvider.instance;
+    _checkWatchedStatus();
+  }
+
+  Future<void> _checkWatchedStatus() async {
+    if (kDebugMode) {
+      debugPrint('_EpisodeCard: Checking watched status for episode');
+      debugPrint('  Series ID: ${widget.seriesItem.id}');
+      debugPrint('  Season: ${widget.seasonNumber}');
+      debugPrint('  Episode: ${widget.episode.episodeNumber}');
+    }
+    
+    final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
+    if (kDebugMode) {
+      debugPrint('  Extracted TMDB ID: $tmdbId');
+    }
+    
+    if (tmdbId != null) {
+      final tmdbIdStr = tmdbId.toString();
+      if (kDebugMode) {
+        debugPrint('  Querying database for: tmdbId=$tmdbIdStr, season=${widget.seasonNumber}, episode=${widget.episode.episodeNumber}');
+      }
+      
+      final isWatched = await _database.isEpisodeWatched(
+        tmdbIdStr,
+        widget.seasonNumber,
+        widget.episode.episodeNumber,
+      );
+      
+      if (kDebugMode) {
+        debugPrint('  Is watched: $isWatched');
+      }
+      
+      if (mounted) {
+        setState(() {
+          _isWatched = isWatched;
+        });
+        if (kDebugMode) {
+          debugPrint('  State updated: _isWatched = $_isWatched');
+        }
+      }
+    } else {
+      if (kDebugMode) {
+        debugPrint('  No TMDB ID found, cannot check watched status');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1053,6 +1106,28 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             ),
                           ),
                         ),
+                        // Watched tag (top left)
+                        if (_isWatched)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: material.Colors.black.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Watched',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
                         // Duration badge (top right)
                         if (widget.episode.runtime != null)
                           Positioned(

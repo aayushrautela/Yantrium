@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'tables.dart';
@@ -182,6 +183,40 @@ class AppDatabase extends _$AppDatabase {
   
   Future<WatchHistoryData?> getWatchHistoryByImdbId(String imdbId) =>
       (select(watchHistory)..where((t) => t.imdbId.equals(imdbId))).getSingleOrNull();
+  
+  /// Check if an episode is watched (progress >= 80%)
+  Future<bool> isEpisodeWatched(String? tmdbId, int seasonNumber, int episodeNumber) async {
+    if (tmdbId == null || tmdbId.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('isEpisodeWatched: tmdbId is null or empty');
+      }
+      return false;
+    }
+    
+    if (kDebugMode) {
+      debugPrint('isEpisodeWatched: Querying for tmdbId=$tmdbId, season=$seasonNumber, episode=$episodeNumber');
+    }
+    
+    final history = await (select(watchHistory)
+      ..where((t) => t.type.equals('episode'))
+      ..where((t) => t.tmdbId.equals(tmdbId))
+      ..where((t) => t.seasonNumber.equals(seasonNumber))
+      ..where((t) => t.episodeNumber.equals(episodeNumber)))
+      .getSingleOrNull();
+    
+    if (history == null) {
+      if (kDebugMode) {
+        debugPrint('isEpisodeWatched: No history found for this episode');
+      }
+      return false;
+    }
+    
+    if (kDebugMode) {
+      debugPrint('isEpisodeWatched: Found history - progress=${history.progress}, watched=${history.progress >= 80.0}');
+    }
+    
+    return history.progress >= 80.0;
+  }
   
   Future<int> upsertWatchHistory(WatchHistoryCompanion history) async {
     return await into(watchHistory).insertOnConflictUpdate(history);

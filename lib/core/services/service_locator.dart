@@ -39,13 +39,22 @@ class ServiceLocator {
 
     _database = database;
 
-    // Validate configuration
-    ConfigurationService.instance.validateConfiguration();
+    // Check if APIs are configured, but don't throw - allow degraded mode
+    final configService = ConfigurationService.instance;
+    final isTmdbConfigured = configService.isTmdbConfigured;
+    final isTraktConfigured = configService.isTraktConfigured;
+
+    if (!isTmdbConfigured) {
+      LoggingService.instance.warning('TMDB API not configured - limited functionality');
+    }
+    if (!isTraktConfigured) {
+      LoggingService.instance.warning('Trakt API not configured - authentication disabled');
+    }
 
     // Initialize services (lazy loading will happen on first access)
     _isInitialized = true;
 
-    LoggingService.instance.info('ServiceLocator initialized successfully');
+    LoggingService.instance.info('ServiceLocator initialized');
   }
 
   /// Get the database instance

@@ -10,15 +10,15 @@ class ConfigurationService {
 
   ConfigurationService._();
 
-  // API Keys
-  String get traktClientId => dotenv.env['TRAKT_CLIENT_ID'] ?? '';
-  String get traktClientSecret => dotenv.env['TRAKT_CLIENT_SECRET'] ?? '';
-  String get traktRedirectUri => dotenv.env['TRAKT_REDIRECT_URI'] ?? 'yantrium://auth/trakt';
-  String get tmdbApiKey => dotenv.env['TMDB_API_KEY'] ?? '';
+  // API Keys - check if dotenv is initialized first
+  String get traktClientId => dotenv.isInitialized ? (dotenv.env['TRAKT_CLIENT_ID'] ?? '') : '';
+  String get traktClientSecret => dotenv.isInitialized ? (dotenv.env['TRAKT_CLIENT_SECRET'] ?? '') : '';
+  String get traktRedirectUri => dotenv.isInitialized ? (dotenv.env['TRAKT_REDIRECT_URI'] ?? 'yantrium://auth/trakt') : 'yantrium://auth/trakt';
+  String get tmdbApiKey => dotenv.isInitialized ? (dotenv.env['TMDB_API_KEY'] ?? '') : '';
 
   // TMDB Configuration
-  String get tmdbBaseUrl => dotenv.env['TMDB_BASE_URL'] ?? 'https://api.themoviedb.org/3';
-  String get tmdbImageBaseUrl => dotenv.env['TMDB_IMAGE_BASE_URL'] ?? 'https://image.tmdb.org/t/p';
+  String get tmdbBaseUrl => dotenv.isInitialized ? (dotenv.env['TMDB_BASE_URL'] ?? 'https://api.themoviedb.org/3') : 'https://api.themoviedb.org/3';
+  String get tmdbImageBaseUrl => dotenv.isInitialized ? (dotenv.env['TMDB_IMAGE_BASE_URL'] ?? 'https://image.tmdb.org/t/p') : 'https://image.tmdb.org/t/p';
 
   // Cache Configuration
   Duration get tmdbCacheTtl => const Duration(minutes: 5);

@@ -24,12 +24,14 @@ class WatchHistoryService {
         return 0;
       }
 
-      // Get playback progress (items currently being watched)
+      // Get both playback progress (currently watching) and watched items (fully watched)
       final progressItems = await ServiceLocator.instance.traktWatchlistService.getPlaybackProgress();
-      
+      final watchedItems = await ServiceLocator.instance.traktWatchlistService.getWatchedItems();
+
       int syncedCount = 0;
       final now = DateTime.now();
 
+      // Process playback progress items (0-100% progress)
       for (final item in progressItems) {
         try {
           final traktId = _extractTraktId(item);
@@ -95,6 +97,96 @@ class WatchHistoryService {
           syncedCount++;
         } catch (e) {
           debugPrint('Error processing watch history item: $e');
+          debugPrint('Item data: $item');
+        }
+      }
+
+      // Process watched items (fully watched - mark as 100% progress)
+      for (final item in watchedItems) {
+        try {
+          // Determine type by checking for movie/show fields (Trakt API structure)
+          if (item.containsKey('movie')) {
+            // Process watched movie
+            final movie = item['movie'] as Map<String, dynamic>?;
+            if (movie != null) {
+              final traktId = movie['ids']?['trakt']?.toString() ??
+                             movie['ids']?['tmdb']?.toString() ??
+                             movie['ids']?['imdb']?.toString() ??
+                             'unknown';
+
+              final title = movie['title'] as String? ?? 'Unknown';
+              final ids = movie['ids'] as Map<String, dynamic>?;
+              final imdbId = ids?['imdb'] as String?;
+              final tmdbId = ids?['tmdb']?.toString();
+              final runtime = movie['runtime'] as int?;
+
+              // Mark as 100% watched
+              await _database.upsertWatchHistory(
+                WatchHistoryCompanion.insert(
+                  traktId: traktId,
+                  type: 'movie',
+                  title: title,
+                  imdbId: Value(imdbId),
+                  tmdbId: Value(tmdbId),
+                  seasonNumber: const Value.absent(),
+                  episodeNumber: const Value.absent(),
+                  progress: 100.0, // Fully watched
+                  watchedAt: now,
+                  pausedAt: const Value.absent(),
+                  runtime: Value(runtime),
+                  lastSyncedAt: now,
+                  createdAt: now,
+                ),
+              );
+
+              syncedCount++;
+            }
+          } else if (item.containsKey('show')) {
+            // Process watched show (all episodes)
+            final show = item['show'] as Map<String, dynamic>?;
+            if (show != null) {
+              final seasons = item['seasons'] as List<dynamic>? ?? [];
+
+              for (final seasonData in seasons) {
+                final seasonNumber = seasonData['number'] as int?;
+                final episodes = seasonData['episodes'] as List<dynamic>? ?? [];
+
+                for (final episodeData in episodes) {
+                  final episodeNumber = episodeData['number'] as int?;
+                  final traktId = '${show['ids']?['trakt'] ?? '0'}:$seasonNumber:$episodeNumber';
+
+                  final title = episodeData['title'] as String? ??
+                               '${show['title'] ?? 'Unknown'} S${seasonNumber}E${episodeNumber}';
+                  final showIds = show['ids'] as Map<String, dynamic>?;
+                  final imdbId = showIds?['imdb'] as String?;
+                  final tmdbId = showIds?['tmdb']?.toString();
+
+                  // Mark episode as 100% watched
+                  await _database.upsertWatchHistory(
+                    WatchHistoryCompanion.insert(
+                      traktId: traktId,
+                      type: 'episode',
+                      title: title,
+                      imdbId: Value(imdbId),
+                      tmdbId: Value(tmdbId),
+                      seasonNumber: Value(seasonNumber),
+                      episodeNumber: Value(episodeNumber),
+                      progress: 100.0, // Fully watched
+                      watchedAt: now,
+                      pausedAt: const Value.absent(),
+                      runtime: const Value.absent(), // Could add episode runtime if available
+                      lastSyncedAt: now,
+                      createdAt: now,
+                    ),
+                  );
+
+                  syncedCount++;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error processing watched item: $e');
           debugPrint('Item data: $item');
         }
       }

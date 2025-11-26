@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:fvp/fvp.dart' as fvp;
@@ -7,19 +8,53 @@ import 'core/database/database_provider.dart';
 import 'core/services/service_locator.dart';
 import 'core/services/theme_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Register FVP (must be before runApp)
-  fvp.registerWith();
-  
-  // Load environment variables
+Future<void> _loadEnvironmentFile() async {
+  // Try current directory first
   try {
     await dotenv.load(fileName: '.env');
+    print('Loaded .env from current directory');
+    return;
   } catch (e) {
-    // .env file might not exist, continue without it
-    // User will need to set it up
+    print('Could not load .env from current directory: $e');
   }
+
+  // Try executable directory
+  try {
+    final exeDir = File(Platform.resolvedExecutable).parent;
+    final envFile = File('${exeDir.path}/.env');
+    if (await envFile.exists()) {
+      await dotenv.load(fileName: envFile.path);
+      print('Loaded .env from executable directory: ${envFile.path}');
+      return;
+    }
+  } catch (e) {
+    print('Could not load .env from executable directory: $e');
+  }
+
+  // Try working directory
+  try {
+    final workingDir = Directory.current;
+    final envFile = File('${workingDir.path}/.env');
+    if (await envFile.exists()) {
+      await dotenv.load(fileName: envFile.path);
+      print('Loaded .env from working directory: ${envFile.path}');
+      return;
+    }
+  } catch (e) {
+    print('Could not load .env from working directory: $e');
+  }
+
+  print('Warning: No .env file found, app will run with limited functionality');
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Register FVP (must be before runApp)
+  fvp.registerWith();
+
+  // Load environment variables - try multiple locations
+  await _loadEnvironmentFile();
 
   // Initialize database and services
   final database = DatabaseProvider.instance;
@@ -30,7 +65,7 @@ void main() async {
 
   // Initialize OAuth handler to listen for deep links globally
   OAuthHandler().initialize();
-  
+
   runApp(const YantriumApp());
 }
 

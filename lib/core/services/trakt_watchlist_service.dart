@@ -276,5 +276,49 @@ class TraktWatchlistService {
       return [];
     }
   }
+
+  /// Get watched items from Trakt
+  /// Returns items that have been fully watched
+  Future<List<Map<String, dynamic>>> getWatchedItems({
+    String type = 'all', // 'movies', 'episodes', or 'all'
+  }) async {
+    if (!['movies', 'episodes', 'all'].contains(type)) {
+      _logger.error('Type must be one of: movies, episodes, all');
+      return [];
+    }
+
+    try {
+      final token = await TraktAuthService(_database).getAccessToken();
+      if (token == null) {
+        _logger.warning('No access token available for watched items');
+        return [];
+      }
+
+      final endpoint = type == 'all'
+          ? '/sync/watched'
+          : '/sync/watched/$type';
+
+      final response = await _dio.get(
+        endpoint,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+
+      final watched = (response.data as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      _logger.debug('Retrieved ${watched.length} watched items');
+      return watched;
+    } catch (e) {
+      _logger.error('Error fetching watched items', e);
+      if (e is DioException) {
+        _logger.debug('Dio error response: ${e.response?.data}');
+      }
+      return [];
+    }
+  }
 }
 

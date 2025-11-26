@@ -9,7 +9,7 @@
 .history
 .svn/
 migrate_working_dir/
-
+NuvioStreaming/
 # IntelliJ related
 *.iml
 *.ipr
