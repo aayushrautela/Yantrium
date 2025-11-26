@@ -304,13 +304,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      headers: const [
-        AppBar(
-          title: Text('Settings'),
-        ),
-      ],
-      child: ListView(
+    return ListView(
         children: [
           // Addon Management Section
           _SectionHeader(
@@ -709,8 +703,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
         ],
-      ),
-    );
+      );
   }
 
   Future<void> _loadCatalogs() async {

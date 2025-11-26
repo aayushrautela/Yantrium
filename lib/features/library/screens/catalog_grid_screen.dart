@@ -16,6 +16,7 @@ import '../../../core/services/tmdb_data_extractor.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/watch_history_service.dart';
 import '../../../core/services/trakt_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/smart_image.dart';
 import '../../../core/services/image_preloader.dart';
 
@@ -60,6 +61,11 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     _loadCatalogs();
     _loadContinueWatching();
     _searchController.addListener(_onSearchChanged);
+    
+    // Perform initial search if controller has text
+    if (_searchController.text.isNotEmpty) {
+      _performSearch(_searchController.text);
+    }
   }
 
   void _onSearchChanged() {
@@ -77,10 +83,17 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     }
 
     try {
-      // First, sync watch history from Trakt
-      await _watchHistoryService.syncWatchHistory();
+      // Try to sync watch history from Trakt if authenticated
+      // If not authenticated, we'll use local data as fallback
+      final isTraktAuthenticated = await ServiceLocator.instance.traktAuthService.isAuthenticated();
+      if (isTraktAuthenticated) {
+        await _watchHistoryService.syncWatchHistory();
+      } else {
+        debugPrint('Trakt not authenticated, using local continue watching data');
+      }
       
-      // Get continue watching items (0-80% progress)
+      // Get continue watching items (0-80% progress) from local database
+      // This works for both Trakt-synced and local-only items
       final historyItems = await _watchHistoryService.getContinueWatching();
       
       // Convert watch history to catalog items with progress
@@ -495,6 +508,7 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     // Only dispose if we created it (not passed from parent)
     if (widget.searchController == null) {
       _searchController.dispose();

@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _libraryScreenKey = GlobalKey();
 
   late final List<Widget> _screens;
 
@@ -25,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _screens = [
       CatalogGridScreen(searchController: _searchController),
-      const LibraryScreen(),
+      LibraryScreen(key: _libraryScreenKey),
       const SettingsScreen(),
     ];
   }
@@ -33,6 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _navigateTo(int index) {
     setState(() {
       _currentIndex = index;
+      // Refresh library when switching to library tab
+      if (index == 1 && _libraryScreenKey.currentState != null) {
+        (_libraryScreenKey.currentState as dynamic).refresh();
+      }
     });
   }
 
@@ -49,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
         PersistentNavigationHeader(
           currentIndex: _currentIndex,
           onNavigate: _navigateTo,
-          searchController: _currentIndex == 0 ? _searchController : null,
+          searchController: _searchController, // Always available for global search
         ),
       ],
       child: _screens[_currentIndex],

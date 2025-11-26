@@ -5,16 +5,12 @@ import '../constants/app_constants.dart';
 class PersistentNavigationHeader extends StatefulWidget {
   final int? currentIndex;
   final ValueChanged<int>? onNavigate;
-  final bool showBackButton;
-  final VoidCallback? onBack;
   final TextEditingController? searchController;
 
   const PersistentNavigationHeader({
     super.key,
     this.currentIndex,
     this.onNavigate,
-    this.showBackButton = false,
-    this.onBack,
     this.searchController,
   });
 
@@ -69,16 +65,6 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
       ),
       child: Row(
         children: [
-          // Back button (if on detail screen)
-          if (widget.showBackButton && widget.onBack != null) ...[
-            GhostButton(
-              onPressed: widget.onBack,
-              density: ButtonDensity.icon,
-              child: const Icon(Icons.arrow_back),
-            ),
-            const SizedBox(width: 16),
-          ],
-          
           // Logo
           Text('YANTRIUM').h3().primaryForeground,
           const SizedBox(width: 32),
@@ -107,48 +93,58 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
           const Spacer(),
           
           // Search
-          SizedBox(
-            width: 300,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.mutedForeground,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: widget.searchController != null
-                      ? TextField(
-                          key: const ValueKey('search_field'),
-                          controller: widget.searchController,
-                          placeholder: const Text('Titles, people, genres'),
-                        )
-                      : TextField(
-                          enabled: false,
-                          placeholder: const Text('Titles, people, genres'),
-                        ),
-                ),
-                if (_hasSearchText && widget.searchController != null) ...[
-                  const SizedBox(width: 8),
-                  Clickable(
-                    onPressed: () {
-                      widget.searchController!.clear();
-                      setState(() {
-                        _hasSearchText = false;
-                      });
-                    },
-                    child: Icon(
-                      Icons.clear,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.mutedForeground,
-                    ),
+          if (widget.currentIndex != 2) ...[
+            SizedBox(
+              width: 300,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.mutedForeground,
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: widget.searchController != null
+                        ? TextField(
+                            key: const ValueKey('search_field'),
+                            controller: widget.searchController,
+                            placeholder: Text(
+                              widget.currentIndex == 1
+                                  ? 'Search library'
+                                  : 'Titles, people, genres',
+                            ),
+                          )
+                        : TextField(
+                            enabled: false,
+                            placeholder: Text(
+                              widget.currentIndex == 1
+                                  ? 'Search library'
+                                  : 'Titles, people, genres',
+                            ),
+                          ),
+                  ),
+                  if (_hasSearchText && widget.searchController != null) ...[
+                    const SizedBox(width: 8),
+                    Clickable(
+                      onPressed: () {
+                        widget.searchController!.clear();
+                        setState(() {
+                          _hasSearchText = false;
+                        });
+                      },
+                      child: Icon(
+                        Icons.clear,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.mutedForeground,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
+            const SizedBox(width: 16),
+          ],
           
           // Notifications
           GhostButton(

@@ -75,3 +75,15 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// Table definition for storing library items (saved content)
+class LibraryItems extends Table {
+  TextColumn get contentId => text()(); // Content ID (e.g., "tmdb:123" or "imdb:tt123")
+  TextColumn get type => text()(); // "movie" or "series"
+  TextColumn get title => text()(); // Title of the content
+  TextColumn get data => text()(); // JSON string of CatalogItem data
+  DateTimeColumn get addedAt => dateTime()(); // When this item was added to library
+
+  @override
+  Set<Column> get primaryKey => {contentId};
+}
+

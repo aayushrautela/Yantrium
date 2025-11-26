@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../logic/fvp_player_controller.dart';
-import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/back_button_overlay.dart';
+import '../../../core/services/service_locator.dart';
+import '../../../core/services/watch_history_service.dart';
 
 /// Video player screen with FVP integration and custom controls
 class VideoPlayerScreen extends StatefulWidget {
@@ -16,6 +18,10 @@ class VideoPlayerScreen extends StatefulWidget {
   final int? seasonNumber; // Season number (for series only)
   final int? episodeNumber; // Episode number (for series only)
   final bool isMovie; // Whether this is a movie (true) or series (false)
+  final String? contentId; // Content ID (e.g., "tmdb:123" or "imdb:tt123")
+  final String? imdbId; // IMDb ID for tracking
+  final String? tmdbId; // TMDB ID for tracking
+  final int? runtime; // Runtime in seconds
 
   const VideoPlayerScreen({
     super.key,
@@ -28,6 +34,10 @@ class VideoPlayerScreen extends StatefulWidget {
     this.seasonNumber,
     this.episodeNumber,
     this.isMovie = false,
+    this.contentId,
+    this.imdbId,
+    this.tmdbId,
+    this.runtime,
   });
 
   @override
@@ -38,11 +48,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final FvpPlayerController _controller;
   bool _showControls = false; // Start hidden when playing
   Timer? _controlsTimer;
+  Timer? _progressSaveTimer;
   bool _isFullscreen = false;
+  late final WatchHistoryService _watchHistoryService;
 
   @override
   void initState() {
     super.initState();
+    _watchHistoryService = ServiceLocator.instance.watchHistoryService;
     _controller = FvpPlayerController();
     _startPlayback();
     // Listen to playing state to manage auto-hide timer
@@ -50,13 +63,90 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (isPlaying) {
         // When playing starts, start the auto-hide timer
         _startAutoHideTimer();
+        _startProgressTracking();
       } else {
         // When paused, cancel timer and ensure paused overlay is visible
         // (paused overlay is always shown, independent of _showControls)
         _cancelAutoHideTimer();
+        _stopProgressTracking();
+        // Save progress when paused
+        _saveProgress();
         // Don't modify _showControls when paused - paused overlay doesn't depend on it
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _saveProgress(); // Save progress when closing
+    _stopProgressTracking();
+    _cancelAutoHideTimer();
+    _controlsTimer?.cancel();
+    _controller.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  void _startProgressTracking() {
+    _stopProgressTracking();
+    // Save progress every 30 seconds while playing
+    _progressSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _saveProgress();
+    });
+  }
+
+  void _stopProgressTracking() {
+    _progressSaveTimer?.cancel();
+    _progressSaveTimer = null;
+  }
+
+  Future<void> _saveProgress() async {
+    if (widget.title == null || widget.title!.isEmpty) return;
+
+    try {
+      final duration = _controller.duration;
+      final position = _controller.position;
+
+      if (duration <= 0 || position < 0) return;
+
+      final progress = (position / duration * 100.0).clamp(0.0, 100.0);
+
+      // Only save if progress is meaningful (at least 1% and less than 100%)
+      if (progress < 1.0 || progress >= 100.0) return;
+
+      // Extract TMDB ID from contentId if available
+      String? tmdbId = widget.tmdbId;
+      String? imdbId = widget.imdbId;
+
+      if (tmdbId == null && widget.contentId != null) {
+        // Try to extract from contentId (e.g., "tmdb:123")
+        if (widget.contentId!.startsWith('tmdb:')) {
+          tmdbId = widget.contentId!.substring(5);
+        } else if (widget.contentId!.startsWith('imdb:')) {
+          imdbId = widget.contentId!.substring(5);
+        }
+      }
+
+      final title = widget.isMovie
+          ? widget.title!
+          : (widget.episodeName ?? widget.title!);
+
+      await _watchHistoryService.saveLocalProgress(
+        contentId: widget.contentId ?? widget.title ?? 'unknown',
+        type: widget.isMovie ? 'movie' : 'episode',
+        title: title,
+        progress: progress,
+        imdbId: imdbId,
+        tmdbId: tmdbId,
+        seasonNumber: widget.seasonNumber,
+        episodeNumber: widget.episodeNumber,
+        runtime: widget.runtime,
+        pausedAt: DateTime.now(),
+      );
+    } catch (e) {
+      // Silently fail - progress saving shouldn't interrupt playback
+      debugPrint('Error saving progress: $e');
+    }
   }
 
   void _startAutoHideTimer() {
@@ -115,8 +205,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-
-
   void _toggleFullscreen() {
     setState(() {
       _isFullscreen = !_isFullscreen;
@@ -144,14 +232,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   @override
-  void dispose() {
-    _controlsTimer?.cancel();
-    _controller.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.black,
@@ -159,7 +239,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         backgroundColor: Colors.black,
         body: Stack(
           alignment: Alignment.center,
-            children: [
+          children: [
             // 1. Video player (bottom layer)
             _controller.videoController != null
                 ? ValueListenableBuilder<VideoPlayerValue>(
@@ -230,7 +310,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 }
                 return const SizedBox.shrink();
               },
-          ),
+            ),
           ],
         ),
       ),
@@ -238,19 +318,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildPausedOverlay() {
-                return Container(
+    return Container(
       color: Colors.black.withOpacity(0.8),
       child: Stack(
         children: [
-          // Top left: Back button
-          Positioned(
-            top: 40,
-            left: 40,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
           Align(
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
@@ -270,29 +341,39 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         child: Image.network(
                           widget.logoUrl!,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const SizedBox.shrink(),
                         ),
                       ),
                     const SizedBox(height: 32),
                     // Season/Episode
-                    if (!widget.isMovie && widget.seasonNumber != null && widget.episodeNumber != null)
+                    if (!widget.isMovie &&
+                        widget.seasonNumber != null &&
+                        widget.episodeNumber != null)
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
                               color: Colors.blueAccent,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               'SEASON ${widget.seasonNumber}',
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                           const SizedBox(width: 16),
                           Text(
                             'EPISODE ${widget.episodeNumber}',
-                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.8),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -329,15 +410,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 28, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                    children: [
+                        children: [
                           Icon(Icons.play_arrow, size: 28),
                           SizedBox(width: 12),
-                          Text('RESUME', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('RESUME',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -345,10 +430,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ),
             ),
-                      ),
-                    ],
-                  ),
-                );
+          ),
+          // Back button overlay
+          BackButtonOverlay(
+            onBack: () {
+              final navigator = Navigator.of(context);
+              if (navigator.canPop()) {
+                navigator.pop();
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildControlsOverlay() {
@@ -359,34 +453,46 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           // Top bar with back button and title
           SafeArea(
-      child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Row(
-          children: [
-            IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-                  const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                      widget.title ?? '',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                        fontWeight: FontWeight.bold,
+            child: Stack(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 48), // Space for back button
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          widget.title ?? '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-                ],
-              ),
+                // Back button overlay
+                BackButtonOverlay(
+                  padding: const EdgeInsets.only(top: 10, left: 10),
+                  onBack: () {
+                    final navigator = Navigator.of(context);
+                    if (navigator.canPop()) {
+                      navigator.pop();
+                    }
+                  },
+                ),
+              ],
             ),
           ),
           const Spacer(),
           // Bottom controls
           _buildBottomControls(),
-          ],
+        ],
       ),
     );
   }
@@ -404,18 +510,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             final position = positionSnapshot.data ?? 0.0;
             final duration = _controller.duration;
             return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
                 ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Progress bar
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Progress bar
                   Slider(
                     value: duration > 0 ? position.clamp(0.0, duration) : 0.0,
                     max: duration > 0 ? duration : 1.0,
@@ -425,16 +531,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     },
                     activeColor: Colors.white,
                     inactiveColor: Colors.white30,
-            ),
-            Row(
+                  ),
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                      Text(_formatDuration(position), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                      Text(_formatDuration(duration), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    children: [
+                      Text(_formatDuration(position),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12)),
+                      Text(_formatDuration(duration),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Buttons
+                  // Buttons Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -445,23 +555,27 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         builder: (context, volumeSnapshot) {
                           final volume = volumeSnapshot.data ?? 100.0;
                           return Row(
-                  children: [
-                    Icon(
-                                volume > 50 ? Icons.volume_up : volume > 0 ? Icons.volume_down : Icons.volume_off,
-                      color: Colors.white,
+                            children: [
+                              Icon(
+                                volume > 50
+                                    ? Icons.volume_up
+                                    : volume > 0
+                                        ? Icons.volume_down
+                                        : Icons.volume_off,
+                                color: Colors.white,
                                 size: 28,
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
                                 width: 120,
-                      child: Slider(
-                        value: volume,
-                        max: 100.0,
-                        onChanged: (value) {
-                          _controller.setVolume(value);
+                                child: Slider(
+                                  value: volume,
+                                  max: 100.0,
+                                  onChanged: (value) {
+                                    _controller.setVolume(value);
                                     _onControlInteraction();
-                        },
-                        activeColor: Colors.white,
+                                  },
+                                  activeColor: Colors.white,
                                   inactiveColor: Colors.white30,
                                 ),
                               ),
@@ -469,11 +583,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           );
                         },
                       ),
-                      // Main controls
+
+                      // Main controls (Rewind, Play, Forward)
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.replay_10, color: Colors.white, size: 36),
+                            icon: const Icon(Icons.replay_10,
+                                color: Colors.white, size: 36),
                             onPressed: () {
                               _controller.seek(position - 10);
                               _onControlInteraction();
@@ -481,7 +597,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           const SizedBox(width: 20),
                           IconButton(
-                            icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 48),
+                            icon: Icon(
+                                isPlaying ? Icons.pause : Icons.play_arrow,
+                                color: Colors.white,
+                                size: 48),
                             onPressed: () {
                               _controller.togglePlayPause();
                               _onControlInteraction();
@@ -489,14 +608,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           const SizedBox(width: 20),
                           IconButton(
-                            icon: const Icon(Icons.forward_10, color: Colors.white, size: 36),
+                            icon: const Icon(Icons.forward_10,
+                                color: Colors.white, size: 36),
                             onPressed: () {
                               _controller.seek(position + 10);
                               _onControlInteraction();
                             },
-                    ),
-                  ],
-                ),
+                          ),
+                        ],
+                      ),
+
                       // Right side: Subtitles, Stream, Audio, Settings
                       Row(
                         children: [
@@ -506,33 +627,37 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             },
                             child: const Text(
                               'Stream: 1',
-                              style: TextStyle(color: Colors.white, fontSize: 16),
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.audiotrack, color: Colors.white, size: 28),
+                            icon: const Icon(Icons.audiotrack,
+                                color: Colors.white, size: 28),
                             onPressed: () {
                               // TODO: Implement audio stream selection
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.closed_caption, color: Colors.white, size: 28),
+                            icon: const Icon(Icons.closed_caption,
+                                color: Colors.white, size: 28),
                             onPressed: () {
                               // TODO: Implement subtitle selection
                             },
                           ),
-                IconButton(
-                            icon: const Icon(Icons.settings, color: Colors.white, size: 28),
-                  onPressed: () {
+                          IconButton(
+                            icon: const Icon(Icons.settings,
+                                color: Colors.white, size: 28),
+                            onPressed: () {
                               // TODO: Implement settings
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ],
-      ),
+              ),
             );
           },
         );

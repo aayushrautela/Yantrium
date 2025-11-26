@@ -7,3 +7,4 @@ Type=Application
 Categories=AudioVideo;Video;Player;
 MimeType=x-scheme-handler/yantrium;
 StartupNotify=true
+

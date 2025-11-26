@@ -277,5 +277,63 @@ class WatchHistoryService {
     final history = await _database.getWatchHistoryByImdbId(imdbId);
     return history?.progress;
   }
+
+  /// Save local watch progress (works without Trakt authentication)
+  /// This is used as a fallback when Trakt is not logged in
+  Future<void> saveLocalProgress({
+    required String contentId, // Can be tmdb:123, imdb:tt123, or any identifier
+    required String type, // 'movie' or 'episode'
+    required String title,
+    required double progress, // 0.0 to 100.0
+    String? imdbId,
+    String? tmdbId,
+    int? seasonNumber,
+    int? episodeNumber,
+    int? runtime,
+    DateTime? pausedAt,
+  }) async {
+    try {
+      // Generate a local ID if we don't have a Trakt ID
+      // Use tmdbId or imdbId or contentId as the identifier
+      String localId;
+      if (tmdbId != null && tmdbId.isNotEmpty) {
+        localId = type == 'episode' && seasonNumber != null && episodeNumber != null
+            ? 'local:$tmdbId:$seasonNumber:$episodeNumber'
+            : 'local:$tmdbId';
+      } else if (imdbId != null && imdbId.isNotEmpty) {
+        localId = type == 'episode' && seasonNumber != null && episodeNumber != null
+            ? 'local:$imdbId:$seasonNumber:$episodeNumber'
+            : 'local:$imdbId';
+      } else {
+        // Fallback to contentId
+        localId = 'local:$contentId';
+      }
+
+      final now = DateTime.now();
+      
+      // Upsert watch history locally
+      await _database.upsertWatchHistory(
+        WatchHistoryCompanion.insert(
+          traktId: localId,
+          type: type,
+          title: title,
+          imdbId: Value(imdbId),
+          tmdbId: Value(tmdbId),
+          seasonNumber: Value(seasonNumber),
+          episodeNumber: Value(episodeNumber),
+          progress: progress,
+          watchedAt: now,
+          pausedAt: Value(pausedAt ?? now),
+          runtime: Value(runtime),
+          lastSyncedAt: now, // Mark as local-only (not synced from Trakt)
+          createdAt: now,
+        ),
+      );
+
+      debugPrint('Saved local watch progress: $title ($progress%)');
+    } catch (e) {
+      debugPrint('Error saving local watch progress: $e');
+    }
+  }
 }
 

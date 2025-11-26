@@ -13,6 +13,7 @@ import '../../player/screens/video_player_screen.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
+import '../../../core/widgets/back_button_overlay.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/tmdb_data_extractor.dart';
@@ -48,7 +49,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   late ScrollController _seasonListScrollController;
   late ScrollController _mainScrollController;
   bool _showSeasonScrollArrow = false;
-  double _seasonSidebarTop = 0;
+  bool _isInLibrary = false;
+  bool _isCheckingLibrary = true;
   Map<String, dynamic>? _tmdbMetadata; // Store raw TMDB metadata
   String? _maturityRating; // Store maturity rating for hero card
   String? _numberOfSeasons; // Store number of seasons for series
@@ -62,38 +64,49 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     _seasonListScrollController = ScrollController();
     _seasonListScrollController.addListener(_checkSeasonScroll);
     _mainScrollController = ScrollController();
-    _mainScrollController.addListener(_updateSeasonSidebarPosition);
     _enrichItem();
     _loadCastAndCrew();
+    _checkLibraryStatus();
+  }
+
+  Future<void> _checkLibraryStatus() async {
+    try {
+      final isInLib = await ServiceLocator.instance.libraryService.isInLibrary(widget.item.id);
+      if (mounted) {
+        setState(() {
+          _isInLibrary = isInLib;
+          _isCheckingLibrary = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCheckingLibrary = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleLibrary() async {
+    final item = _enrichedItem ?? widget.item;
+    try {
+      final success = await ServiceLocator.instance.libraryService.toggleLibraryStatus(item);
+      if (success && mounted) {
+        setState(() {
+          _isInLibrary = !_isInLibrary;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling library status: $e');
+    }
   }
 
   @override
   void dispose() {
     _seasonListScrollController.removeListener(_checkSeasonScroll);
     _seasonListScrollController.dispose();
-    _mainScrollController.removeListener(_updateSeasonSidebarPosition);
     _mainScrollController.dispose();
     super.dispose();
-  }
-
-  void _updateSeasonSidebarPosition() {
-    if (!_mainScrollController.hasClients) return;
-    
-    // Calculate where the episodes section starts (after hero content)
-    // Hero content: top padding 120 + logo ~250 + metadata ~40 + rating icons ~40 + description ~100 + buttons ~60 + tabs ~60 + spacing
-    // Roughly around 800px
-    const episodesSectionStart = 800.0;
-    final scrollOffset = _mainScrollController.offset;
-    
-    // Calculate position: when episodes section reaches top, stick sidebar to top (0)
-    // Before that, position it so it moves with content until it reaches top
-    final newTop = (episodesSectionStart - scrollOffset).clamp(0.0, double.infinity);
-    
-    if ((newTop - _seasonSidebarTop).abs() > 1.0) {
-      setState(() {
-        _seasonSidebarTop = newTop;
-      });
-    }
   }
 
   void _checkSeasonScroll() {
@@ -335,6 +348,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
           
           // Navigate to video player with selected stream
           if (mounted) {
+            // Extract IDs for progress tracking
+            final tmdbId = IdParser.extractTmdbId(item.id)?.toString();
+            final imdbId = IdParser.isImdbId(item.id) ? item.id : null;
+            
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => VideoPlayerScreen(
@@ -351,6 +368,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                   seasonNumber: item.type == 'series' ? firstSeasonNumber : null,
                   episodeNumber: item.type == 'series' ? firstEpisode?.episodeNumber : null,
                   isMovie: item.type == 'movie',
+                  contentId: item.id,
+                  imdbId: imdbId,
+                  tmdbId: tmdbId,
+                  runtime: item.runtime != null 
+                      ? _parseRuntimeToSeconds(item.runtime!)
+                      : null,
                 ),
               ),
             );
@@ -539,6 +562,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
           
           // Navigate to video player with selected stream
           if (mounted) {
+            // Extract IDs for progress tracking
+            final tmdbId = IdParser.extractTmdbId(seriesItem.id)?.toString();
+            final imdbId = IdParser.isImdbId(seriesItem.id) ? seriesItem.id : null;
+            
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => VideoPlayerScreen(
@@ -551,6 +578,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                   seasonNumber: seasonNumber,
                   episodeNumber: episode.episodeNumber,
                   isMovie: false,
+                  contentId: seriesItem.id,
+                  imdbId: imdbId,
+                  tmdbId: tmdbId,
+                  runtime: episode.runtime != null 
+                      ? episode.runtime! * 60 // Convert minutes to seconds
+                      : null,
                 ),
               ),
             );
@@ -702,21 +735,38 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     }
   }
 
+  /// Parse runtime string (e.g., "120 min") to seconds
+  int? _parseRuntimeToSeconds(String runtime) {
+    try {
+      // Try to extract number from strings like "120 min", "2h 30m", etc.
+      final match = RegExp(r'(\d+)').firstMatch(runtime);
+      if (match != null) {
+        final minutes = int.parse(match.group(1)!);
+        return minutes * 60; // Convert to seconds
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = _enrichedItem ?? widget.item;
 
-    return Scaffold(
-      headers: [
-        PersistentNavigationHeader(
-          showBackButton: true,
-          onBack: () => Navigator.of(context).pop(),
-        ),
-      ],
-      child: Container(
+    return Container(
         color: Theme.of(context).colorScheme.background,
         child: Stack(
           children: [
+            // Back button overlay
+            BackButtonOverlay(
+              onBack: () {
+                final navigator = Navigator.of(context);
+                if (navigator.canPop()) {
+                  navigator.pop();
+                }
+              },
+            ),
             // Scrollable content
             Column(
               children: [
@@ -941,15 +991,18 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                               ),
                               const SizedBox(width: 16),
                               SecondaryButton(
-                                onPressed: () {},
-                                child: const Row(
+                                onPressed: _isCheckingLibrary ? null : _toggleLibrary,
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.add, size: 24),
-                                    SizedBox(width: 10),
+                                    Icon(
+                                      _isInLibrary ? Icons.check : Icons.add,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 10),
                                     Text(
-                                      'My List',
-                                      style: TextStyle(fontSize: 16),
+                                      _isInLibrary ? 'In Library' : 'My List',
+                                      style: const TextStyle(fontSize: 16),
                                     ),
                                   ],
                                 ),
@@ -1010,106 +1063,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             ),
           ],
             ),
-            // Sticky season sidebar - positioned relative to viewport
-            if (item.type == 'series' && _seasons.isNotEmpty && _selectedTab == 0)
-              Positioned(
-                left: AppConstants.horizontalMargin,
-                top: _seasonSidebarTop.clamp(0.0, double.infinity),
-                child: Container(
-                  width: 200,
-                  height: 300,
-                  color: Theme.of(context).colorScheme.background,
-                  child: Stack(
-                    children: [
-                      ListView.builder(
-                        controller: _seasonListScrollController,
-                        itemCount: _seasons.length,
-                        itemBuilder: (context, index) {
-                          final season = _seasons[index];
-                          final isSelected = season.seasonNumber == _selectedSeasonNumber;
-
-                          return Clickable(
-                            onPressed: () {
-                              setState(() {
-                                _selectedSeasonNumber = season.seasonNumber;
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .foreground
-                                        .withOpacity(0.1)
-                                    : Colors.transparent,
-                                border: Border(
-                                  left: BorderSide(
-                                    color: isSelected ? Colors.yellow : Colors.transparent,
-                                    width: 3,
-                                  ),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      season.name,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.yellow
-                                            : Theme.of(context).colorScheme.foreground,
-                                        fontWeight:
-                                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    const Icon(
-                                      Icons.arrow_forward_ios,
-                                      size: 12,
-                                      color: Colors.yellow,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      // Scroll indicator arrow at the bottom
-                      if (_showSeasonScrollArrow)
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            height: 40,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.keyboard_arrow_down,
-                                color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
-      ),
     );
   }
 
@@ -1861,90 +1816,206 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       orElse: () => _seasons.first,
     );
 
-    // Episodes content with left padding for season sidebar
-    return Padding(
-      padding: const EdgeInsets.only(left: 232), // 200 width + 32 spacing
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Season header
-          Row(
+    // Horizontal layout: seasons list on left, episodes on right
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Seasons list
+        SizedBox(
+          width: 200,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Season header aligned with episode header
               Text(
-                selectedSeason.name,
+                'Season',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                '${selectedSeason.episodes.length} Episodes',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .foreground
-                      .withOpacity(0.7),
+              const SizedBox(height: 24),
+              // Seasons list
+              Container(
+                constraints: const BoxConstraints(maxHeight: 600),
+                child: Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _seasonListScrollController,
+                      shrinkWrap: true,
+                      itemCount: _seasons.length,
+                      itemBuilder: (context, index) {
+                        final season = _seasons[index];
+                        final isSelected = season.seasonNumber == _selectedSeasonNumber;
+
+                        return Clickable(
+                          onPressed: () {
+                            setState(() {
+                              _selectedSeasonNumber = season.seasonNumber;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .foreground
+                                      .withOpacity(0.1)
+                                  : Colors.transparent,
+                              border: Border(
+                                left: BorderSide(
+                                  color: isSelected ? Colors.yellow : Colors.transparent,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    season.name,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.yellow
+                                          : Theme.of(context).colorScheme.foreground,
+                                      fontWeight:
+                                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 12,
+                                    color: Colors.yellow,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    // Scroll indicator arrow at the bottom
+                    if (_showSeasonScrollArrow)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Theme.of(context).colorScheme.background.withOpacity(0.8),
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 32),
+        // Episodes content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Season header
+              Row(
+                children: [
+                  Text(
+                    selectedSeason.name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${selectedSeason.episodes.length} Episodes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .foreground
+                          .withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
 
-          const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-          // Episodes grid
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = constraints.maxWidth;
-              int crossAxisCount;
-              if (screenWidth > 1600) {
-                crossAxisCount = 4;
-              } else if (screenWidth > 1200) {
-                crossAxisCount = 4;
-              } else if (screenWidth > 800) {
-                crossAxisCount = 3;
-              } else {
-                crossAxisCount = 2;
-              }
+              // Episodes grid
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = constraints.maxWidth;
+                  int crossAxisCount;
+                  if (screenWidth > 1600) {
+                    crossAxisCount = 4;
+                  } else if (screenWidth > 1200) {
+                    crossAxisCount = 4;
+                  } else if (screenWidth > 800) {
+                    crossAxisCount = 3;
+                  } else {
+                    crossAxisCount = 2;
+                  }
 
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 40),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.2,
-                ),
-                itemCount: selectedSeason.episodes.length,
-                itemBuilder: (context, index) {
-                  final episode = selectedSeason.episodes[index];
-                  return _EpisodeCard(
-                    episode: episode,
-                    seriesItem: item,
-                    seasonNumber: selectedSeason.seasonNumber,
-                    onPlay: () {
-                      Navigator.of(context).push(
-                        material.MaterialPageRoute(
-                          builder: (context) => EpisodeDetailScreen(
-                            seriesItem: item,
-                            episode: episode,
-                            seasonNumber: selectedSeason.seasonNumber,
-                          ),
-                        ),
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 40),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 1.2,
+                    ),
+                    itemCount: selectedSeason.episodes.length,
+                    itemBuilder: (context, index) {
+                      final episode = selectedSeason.episodes[index];
+                      return _EpisodeCard(
+                        episode: episode,
+                        seriesItem: item,
+                        seasonNumber: selectedSeason.seasonNumber,
+                        onPlay: () {
+                          Navigator.of(context).push(
+                            material.MaterialPageRoute(
+                              builder: (context) => EpisodeDetailScreen(
+                                seriesItem: item,
+                                episode: episode,
+                                seasonNumber: selectedSeason.seasonNumber,
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
                 },
-              );
-            },
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

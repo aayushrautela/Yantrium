@@ -7,12 +7,12 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Addons, CatalogPreferences, TraktAuth, WatchHistory, AppSettings])
+@DriftDatabase(tables: [Addons, CatalogPreferences, TraktAuth, WatchHistory, AppSettings, LibraryItems])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -29,6 +29,9 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 5) {
           await migrator.createTable(appSettings);
+        }
+        if (from < 6) {
+          await migrator.createTable(libraryItems);
         }
       },
     );
@@ -219,6 +222,24 @@ class AppDatabase extends _$AppDatabase {
   
   Future<int> deleteSetting(String key) =>
       (delete(appSettings)..where((t) => t.key.equals(key))).go();
+
+  // Library Items DAO methods
+  Future<List<LibraryItem>> getAllLibraryItems() =>
+      (select(libraryItems)..orderBy([(t) => OrderingTerm.desc(t.addedAt)])).get();
+  
+  Future<LibraryItem?> getLibraryItemByContentId(String contentId) =>
+      (select(libraryItems)..where((t) => t.contentId.equals(contentId))).getSingleOrNull();
+  
+  Future<int> addLibraryItem(LibraryItemsCompanion item) =>
+      into(libraryItems).insertOnConflictUpdate(item);
+  
+  Future<int> removeLibraryItem(String contentId) =>
+      (delete(libraryItems)..where((t) => t.contentId.equals(contentId))).go();
+  
+  Future<bool> isInLibrary(String contentId) async {
+    final item = await getLibraryItemByContentId(contentId);
+    return item != null;
+  }
 }
 
 LazyDatabase _openConnection() {

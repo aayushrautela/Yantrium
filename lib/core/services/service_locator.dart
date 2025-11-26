@@ -8,6 +8,7 @@ import 'tmdb_metadata_service.dart';
 import 'tmdb_search_service.dart';
 import 'tmdb_enrichment_service.dart';
 import 'watch_history_service.dart';
+import 'library_service.dart';
 
 /// Service Locator for dependency injection
 class ServiceLocator {
@@ -30,6 +31,7 @@ class ServiceLocator {
   TmdbSearchService? _tmdbSearchService;
   TmdbEnrichmentService? _tmdbEnrichmentService;
   WatchHistoryService? _watchHistoryService;
+  LibraryService? _libraryService;
 
   /// Initialize the service locator with required dependencies
   Future<void> initialize(AppDatabase database) async {
@@ -96,6 +98,12 @@ class ServiceLocator {
     return _watchHistoryService!;
   }
 
+  /// Get library service
+  LibraryService get libraryService {
+    _libraryService ??= LibraryService(database);
+    return _libraryService!;
+  }
+
   /// Reset all services (useful for testing)
   void reset() {
     _traktAuthService = null;
@@ -105,6 +113,7 @@ class ServiceLocator {
     _tmdbSearchService = null;
     _tmdbEnrichmentService = null;
     _watchHistoryService = null;
+    _libraryService = null;
     _isInitialized = false;
   }
 }

@@ -2299,6 +2299,313 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
   }
 }
 
+class $LibraryItemsTable extends LibraryItems
+    with TableInfo<$LibraryItemsTable, LibraryItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LibraryItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _contentIdMeta =
+      const VerificationMeta('contentId');
+  @override
+  late final GeneratedColumn<String> contentId = GeneratedColumn<String>(
+      'content_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+      'type', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dataMeta = const VerificationMeta('data');
+  @override
+  late final GeneratedColumn<String> data = GeneratedColumn<String>(
+      'data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _addedAtMeta =
+      const VerificationMeta('addedAt');
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+      'added_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [contentId, type, title, data, addedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'library_items';
+  @override
+  VerificationContext validateIntegrity(Insertable<LibraryItem> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('content_id')) {
+      context.handle(_contentIdMeta,
+          contentId.isAcceptableOrUnknown(data['content_id']!, _contentIdMeta));
+    } else if (isInserting) {
+      context.missing(_contentIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+          _typeMeta, type.isAcceptableOrUnknown(data['type']!, _typeMeta));
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('data')) {
+      context.handle(
+          _dataMeta, this.data.isAcceptableOrUnknown(data['data']!, _dataMeta));
+    } else if (isInserting) {
+      context.missing(_dataMeta);
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(_addedAtMeta,
+          addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
+    } else if (isInserting) {
+      context.missing(_addedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {contentId};
+  @override
+  LibraryItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LibraryItem(
+      contentId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}content_id'])!,
+      type: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}type'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+      data: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}data'])!,
+      addedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}added_at'])!,
+    );
+  }
+
+  @override
+  $LibraryItemsTable createAlias(String alias) {
+    return $LibraryItemsTable(attachedDatabase, alias);
+  }
+}
+
+class LibraryItem extends DataClass implements Insertable<LibraryItem> {
+  final String contentId;
+  final String type;
+  final String title;
+  final String data;
+  final DateTime addedAt;
+  const LibraryItem(
+      {required this.contentId,
+      required this.type,
+      required this.title,
+      required this.data,
+      required this.addedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['content_id'] = Variable<String>(contentId);
+    map['type'] = Variable<String>(type);
+    map['title'] = Variable<String>(title);
+    map['data'] = Variable<String>(data);
+    map['added_at'] = Variable<DateTime>(addedAt);
+    return map;
+  }
+
+  LibraryItemsCompanion toCompanion(bool nullToAbsent) {
+    return LibraryItemsCompanion(
+      contentId: Value(contentId),
+      type: Value(type),
+      title: Value(title),
+      data: Value(data),
+      addedAt: Value(addedAt),
+    );
+  }
+
+  factory LibraryItem.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LibraryItem(
+      contentId: serializer.fromJson<String>(json['contentId']),
+      type: serializer.fromJson<String>(json['type']),
+      title: serializer.fromJson<String>(json['title']),
+      data: serializer.fromJson<String>(json['data']),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'contentId': serializer.toJson<String>(contentId),
+      'type': serializer.toJson<String>(type),
+      'title': serializer.toJson<String>(title),
+      'data': serializer.toJson<String>(data),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
+    };
+  }
+
+  LibraryItem copyWith(
+          {String? contentId,
+          String? type,
+          String? title,
+          String? data,
+          DateTime? addedAt}) =>
+      LibraryItem(
+        contentId: contentId ?? this.contentId,
+        type: type ?? this.type,
+        title: title ?? this.title,
+        data: data ?? this.data,
+        addedAt: addedAt ?? this.addedAt,
+      );
+  LibraryItem copyWithCompanion(LibraryItemsCompanion data) {
+    return LibraryItem(
+      contentId: data.contentId.present ? data.contentId.value : this.contentId,
+      type: data.type.present ? data.type.value : this.type,
+      title: data.title.present ? data.title.value : this.title,
+      data: data.data.present ? data.data.value : this.data,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryItem(')
+          ..write('contentId: $contentId, ')
+          ..write('type: $type, ')
+          ..write('title: $title, ')
+          ..write('data: $data, ')
+          ..write('addedAt: $addedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(contentId, type, title, data, addedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LibraryItem &&
+          other.contentId == this.contentId &&
+          other.type == this.type &&
+          other.title == this.title &&
+          other.data == this.data &&
+          other.addedAt == this.addedAt);
+}
+
+class LibraryItemsCompanion extends UpdateCompanion<LibraryItem> {
+  final Value<String> contentId;
+  final Value<String> type;
+  final Value<String> title;
+  final Value<String> data;
+  final Value<DateTime> addedAt;
+  final Value<int> rowid;
+  const LibraryItemsCompanion({
+    this.contentId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.title = const Value.absent(),
+    this.data = const Value.absent(),
+    this.addedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LibraryItemsCompanion.insert({
+    required String contentId,
+    required String type,
+    required String title,
+    required String data,
+    required DateTime addedAt,
+    this.rowid = const Value.absent(),
+  })  : contentId = Value(contentId),
+        type = Value(type),
+        title = Value(title),
+        data = Value(data),
+        addedAt = Value(addedAt);
+  static Insertable<LibraryItem> custom({
+    Expression<String>? contentId,
+    Expression<String>? type,
+    Expression<String>? title,
+    Expression<String>? data,
+    Expression<DateTime>? addedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (contentId != null) 'content_id': contentId,
+      if (type != null) 'type': type,
+      if (title != null) 'title': title,
+      if (data != null) 'data': data,
+      if (addedAt != null) 'added_at': addedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LibraryItemsCompanion copyWith(
+      {Value<String>? contentId,
+      Value<String>? type,
+      Value<String>? title,
+      Value<String>? data,
+      Value<DateTime>? addedAt,
+      Value<int>? rowid}) {
+    return LibraryItemsCompanion(
+      contentId: contentId ?? this.contentId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      data: data ?? this.data,
+      addedAt: addedAt ?? this.addedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (contentId.present) {
+      map['content_id'] = Variable<String>(contentId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (data.present) {
+      map['data'] = Variable<String>(data.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryItemsCompanion(')
+          ..write('contentId: $contentId, ')
+          ..write('type: $type, ')
+          ..write('title: $title, ')
+          ..write('data: $data, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2308,12 +2615,19 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TraktAuthTable traktAuth = $TraktAuthTable(this);
   late final $WatchHistoryTable watchHistory = $WatchHistoryTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
+  late final $LibraryItemsTable libraryItems = $LibraryItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [addons, catalogPreferences, traktAuth, watchHistory, appSettings];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        addons,
+        catalogPreferences,
+        traktAuth,
+        watchHistory,
+        appSettings,
+        libraryItems
+      ];
 }
 
 typedef $$AddonsTableCreateCompanionBuilder = AddonsCompanion Function({
@@ -3437,6 +3751,179 @@ typedef $$AppSettingsTableProcessedTableManager = ProcessedTableManager<
     (AppSetting, BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>),
     AppSetting,
     PrefetchHooks Function()>;
+typedef $$LibraryItemsTableCreateCompanionBuilder = LibraryItemsCompanion
+    Function({
+  required String contentId,
+  required String type,
+  required String title,
+  required String data,
+  required DateTime addedAt,
+  Value<int> rowid,
+});
+typedef $$LibraryItemsTableUpdateCompanionBuilder = LibraryItemsCompanion
+    Function({
+  Value<String> contentId,
+  Value<String> type,
+  Value<String> title,
+  Value<String> data,
+  Value<DateTime> addedAt,
+  Value<int> rowid,
+});
+
+class $$LibraryItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $LibraryItemsTable> {
+  $$LibraryItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get contentId => $composableBuilder(
+      column: $table.contentId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+      column: $table.addedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$LibraryItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LibraryItemsTable> {
+  $$LibraryItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get contentId => $composableBuilder(
+      column: $table.contentId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get data => $composableBuilder(
+      column: $table.data, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+      column: $table.addedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$LibraryItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LibraryItemsTable> {
+  $$LibraryItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get contentId =>
+      $composableBuilder(column: $table.contentId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get data =>
+      $composableBuilder(column: $table.data, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+}
+
+class $$LibraryItemsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $LibraryItemsTable,
+    LibraryItem,
+    $$LibraryItemsTableFilterComposer,
+    $$LibraryItemsTableOrderingComposer,
+    $$LibraryItemsTableAnnotationComposer,
+    $$LibraryItemsTableCreateCompanionBuilder,
+    $$LibraryItemsTableUpdateCompanionBuilder,
+    (
+      LibraryItem,
+      BaseReferences<_$AppDatabase, $LibraryItemsTable, LibraryItem>
+    ),
+    LibraryItem,
+    PrefetchHooks Function()> {
+  $$LibraryItemsTableTableManager(_$AppDatabase db, $LibraryItemsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LibraryItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LibraryItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LibraryItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> contentId = const Value.absent(),
+            Value<String> type = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<String> data = const Value.absent(),
+            Value<DateTime> addedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              LibraryItemsCompanion(
+            contentId: contentId,
+            type: type,
+            title: title,
+            data: data,
+            addedAt: addedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String contentId,
+            required String type,
+            required String title,
+            required String data,
+            required DateTime addedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              LibraryItemsCompanion.insert(
+            contentId: contentId,
+            type: type,
+            title: title,
+            data: data,
+            addedAt: addedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$LibraryItemsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $LibraryItemsTable,
+    LibraryItem,
+    $$LibraryItemsTableFilterComposer,
+    $$LibraryItemsTableOrderingComposer,
+    $$LibraryItemsTableAnnotationComposer,
+    $$LibraryItemsTableCreateCompanionBuilder,
+    $$LibraryItemsTableUpdateCompanionBuilder,
+    (
+      LibraryItem,
+      BaseReferences<_$AppDatabase, $LibraryItemsTable, LibraryItem>
+    ),
+    LibraryItem,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3451,4 +3938,6 @@ class $AppDatabaseManager {
       $$WatchHistoryTableTableManager(_db, _db.watchHistory);
   $$AppSettingsTableTableManager get appSettings =>
       $$AppSettingsTableTableManager(_db, _db.appSettings);
+  $$LibraryItemsTableTableManager get libraryItems =>
+      $$LibraryItemsTableTableManager(_db, _db.libraryItems);
 }

@@ -146,53 +146,45 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      headers: [
-        PersistentNavigationHeader(
-          showBackButton: true,
-          onBack: () => Navigator.of(context).pop(),
+    return Column(
+      children: [
+        // Search bar
+        Container(
+          padding: AppConstants.horizontalPadding.copyWith(
+            top: 16,
+            bottom: 16,
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.search),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  placeholder: const Text('Search titles, people, genres'),
+                ),
+              ),
+              if (_hasText)
+                Clickable(
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _results = [];
+                      _hasText = false;
+                    });
+                  },
+                  child: const Icon(Icons.clear),
+                ),
+            ],
+          ),
+        ),
+
+        // Results
+        Expanded(
+          child: _buildResults(),
         ),
       ],
-      child: Column(
-        children: [
-          // Search bar
-          Container(
-            padding: AppConstants.horizontalPadding.copyWith(
-              top: 16,
-              bottom: 16,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    placeholder: const Text('Search titles, people, genres'),
-                  ),
-                ),
-                if (_hasText)
-                  Clickable(
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() {
-                        _results = [];
-                        _hasText = false;
-                      });
-                    },
-                    child: const Icon(Icons.clear),
-                  ),
-              ],
-            ),
-          ),
-
-          // Results
-          Expanded(
-            child: _buildResults(),
-          ),
-        ],
-      ),
     );
   }
 
