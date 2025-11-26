@@ -734,15 +734,6 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         color: Theme.of(context).colorScheme.background,
         child: Stack(
           children: [
-            // Back button overlay
-            BackButtonOverlay(
-              onBack: () {
-                final navigator = Navigator.of(context);
-                if (navigator.canPop()) {
-                  navigator.pop();
-                }
-              },
-            ),
             // Scrollable content
             Column(
               children: [
@@ -953,6 +944,15 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
               ),
             ),
           ],
+            ),
+            // Back button overlay - placed last so it's rendered on top
+            BackButtonOverlay(
+              onBack: () {
+                final navigator = Navigator.of(context);
+                if (navigator.canPop()) {
+                  navigator.pop();
+                }
+              },
             ),
           ],
         ),
