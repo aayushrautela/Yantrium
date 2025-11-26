@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=Yantrium
+Name=yantrium
 Comment=Media streaming application
 Exec=yantrium %u
-Icon=com.yantrium.Yatrium
+Icon=com.yantrium.yantrium
 Type=Application
 Categories=AudioVideo;Video;Player;
 MimeType=x-scheme-handler/yantrium;

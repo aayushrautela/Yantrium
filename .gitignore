@@ -54,3 +54,16 @@ flatpak-bundle/
 build-dir/
 repo/
 *.flatpak
+
+# Windows build artifacts
+**/windows/**/*.exe
+**/windows/**/*.pdb
+**/windows/**/Debug/
+**/windows/**/Release/
+**/windows/**/x64/
+
+# Visual Studio
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln

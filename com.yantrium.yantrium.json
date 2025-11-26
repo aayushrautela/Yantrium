@@ -1,5 +1,5 @@
 {
-  "app-id": "com.yantrium.Yatrium",
+  "app-id": "com.yantrium.yantrium",
   "runtime": "org.freedesktop.Platform",
   "runtime-version": "24.08",
   "sdk": "org.freedesktop.Sdk",
@@ -30,7 +30,7 @@
         "chmod +x /app/yantrium",
         "ln -sf /app/yantrium /app/bin/yantrium",
         "if command -v patchelf >/dev/null 2>&1; then patchelf --set-rpath /app/lib:/usr/lib:/usr/lib64 /app/yantrium 2>/dev/null || true; fi",
-        "cp com.yantrium.Yatrium.desktop /app/share/applications/",
+        "cp com.yantrium.yantrium.desktop /app/share/applications/",
         "update-desktop-database /app/share/applications/ || true",
         "echo '=== Verifying bundle structure ==='",
         "ls -lh /app/yantrium || echo 'ERROR: yantrium not found'",

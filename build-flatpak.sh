@@ -7,7 +7,7 @@ rm -rf build/linux/x64/release/bundle
 rm -rf flatpak-bundle
 rm -rf build-dir
 rm -rf repo
-rm -f yatrium.flatpak
+rm -f yantrium.flatpak
 
 echo "Building Flutter app for Linux..."
 flutter clean
@@ -26,8 +26,8 @@ mkdir -p "$FLATPAK_BUNDLE_DIR"
 cp -r "$BUNDLE_DIR"/* "$FLATPAK_BUNDLE_DIR/"
 
 # Copy desktop file for URI scheme registration
-if [ -f "com.yantrium.Yatrium.desktop" ]; then
-    cp com.yantrium.Yatrium.desktop "$FLATPAK_BUNDLE_DIR/"
+if [ -f "com.yantrium.yantrium.desktop" ]; then
+    cp com.yantrium.yantrium.desktop "$FLATPAK_BUNDLE_DIR/"
 fi
 
 # FVP bundles FFmpeg in mdk-sdk-linux.tar.xz, which should be in bundle/lib
@@ -37,14 +37,14 @@ if [ -d "$BUNDLE_DIR/lib" ]; then
 fi
 
 echo "Building Flatpak..."
-flatpak-builder --force-clean --repo=repo build-dir com.yantrium.Yatrium.json
+flatpak-builder --force-clean --repo=repo build-dir com.yantrium.yantrium.json
 
 echo "Building Flatpak bundle..."
-flatpak build-bundle repo yatrium.flatpak com.yantrium.Yatrium
+flatpak build-bundle repo yantrium.flatpak com.yantrium.yantrium
 
 echo ""
 echo "=========================================="
-echo "Flatpak bundle created: yatrium.flatpak"
+echo "Flatpak bundle created: yantrium.flatpak"
 echo "=========================================="
 echo ""
 echo "To install on any Linux system:"
@@ -54,10 +54,10 @@ echo "     - Ubuntu/Debian: sudo apt install flatpak"
 echo "     - Arch: sudo pacman -S flatpak"
 echo ""
 echo "  2. Install the bundle:"
-echo "     flatpak install --user yatrium.flatpak"
+echo "     flatpak install --user yantrium.flatpak"
 echo ""
 echo "  3. Run the app:"
-echo "     flatpak run com.yantrium.Yatrium"
+echo "     flatpak run com.yantrium.yantrium"
 echo ""
 echo "The bundle is portable and can be distributed to any Linux system!"
 
