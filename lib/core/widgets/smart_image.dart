@@ -74,8 +74,8 @@ class _SmartImageState extends State<SmartImage> {
       return _buildErrorWidget();
     }
 
-    // Skip lazy loading for hero images
-    if (widget.priority == ImagePriority.hero) {
+    // Load immediately for hero and visible priority images (catalog content)
+    if (widget.priority == ImagePriority.hero || widget.priority == ImagePriority.visible) {
       return CachedNetworkImage(
         imageUrl: widget.imageUrl!,
         width: widget.width,
@@ -86,7 +86,7 @@ class _SmartImageState extends State<SmartImage> {
       );
     }
 
-    // Lazy load for other priorities
+    // Lazy load for background/near-viewport priorities
     return VisibilityDetector(
       key: Key(_visibilityKey),
       onVisibilityChanged: (visibilityInfo) {
