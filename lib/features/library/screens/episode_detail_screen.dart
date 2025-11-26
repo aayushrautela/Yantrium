@@ -782,25 +782,31 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                 ),
                               ),
                             ),
-                            // Gradient to blend bottom edge (horizontal fade from bottom to top)
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    Theme.of(context).colorScheme.background,
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .background
-                                        .withOpacity(0.6),
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .background
-                                        .withOpacity(0.2),
-                                    Colors.transparent,
-                                  ],
-                                  stops: const [0.0, 0.15, 0.35, 1.0],
+                            // BackdropFilter for smooth bottom blending
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: 80, // Height of the blend area
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Theme.of(context).colorScheme.background.withOpacity(0.9),
+                                      Theme.of(context).colorScheme.background.withOpacity(0.4),
+                                      Theme.of(context).colorScheme.background.withOpacity(0.1),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.0, 0.3, 0.7, 1.0],
+                                  ),
+                                ),
+                                child: BackdropFilter(
+                                  filter: material.ImageFilter.blur(sigmaX: 0.5, sigmaY: 0.5),
+                                  child: Container(
+                                    color: Colors.transparent,
+                                  ),
                                 ),
                               ),
                             ),

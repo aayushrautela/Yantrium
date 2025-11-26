@@ -1,0 +1,47 @@
+name: Build Windows
+
+# Manual trigger only - doesn't run on every commit
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.5.4'
+        channel: 'stable'
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+
+    - name: Create Windows platform support
+      run: flutter create --platforms=windows .
+
+    - name: Build Windows ${{ inputs.build_type }}
+      run: flutter build windows --${{ inputs.build_type }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: yatrium-windows-${{ inputs.build_type }}
+        path: build/windows/x64/runner/${{ inputs.build_type == 'release' && 'Release' || 'Debug' }}/
+        retention-days: 30
