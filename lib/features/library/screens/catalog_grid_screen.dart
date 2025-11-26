@@ -1068,11 +1068,12 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                                 end: Alignment.topCenter,
                                 colors: [
                                   Theme.of(context).colorScheme.background,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.6),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.2),
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
                                   Colors.transparent,
                                 ],
-                                stops: const [0.0, 0.15, 0.35, 1.0],
+                                stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
                               ),
                             ),
                           ),
@@ -1136,22 +1137,23 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                             ),
                           ),
                         ),
-                        // Gradient to blend bottom edge
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Theme.of(context).colorScheme.background,
-                                Theme.of(context).colorScheme.background.withOpacity(0.6),
-                                Theme.of(context).colorScheme.background.withOpacity(0.2),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.15, 0.35, 1.0],
+                          // Gradient to blend bottom edge
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -1186,11 +1188,12 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                     end: Alignment.topCenter,
                     colors: [
                       Theme.of(context).colorScheme.background,
-                      Theme.of(context).colorScheme.background.withOpacity(0.6),
-                      Theme.of(context).colorScheme.background.withOpacity(0.2),
+                      Theme.of(context).colorScheme.background,
+                      Theme.of(context).colorScheme.background.withOpacity(0.8),
+                      Theme.of(context).colorScheme.background.withOpacity(0.5),
                       Colors.transparent,
                     ],
-                    stops: const [0.0, 0.15, 0.35, 1.0],
+                    stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
                   ),
                 ),
               ),

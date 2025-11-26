@@ -39,3 +39,4 @@ class ImagePreloader {
   /// Get cache size for debugging
   static int get cacheSize => _preloadCache.length;
 }
+

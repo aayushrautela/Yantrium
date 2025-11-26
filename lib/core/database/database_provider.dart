@@ -18,3 +18,4 @@ class DatabaseProvider {
     _instance = null;
   }
 }
+

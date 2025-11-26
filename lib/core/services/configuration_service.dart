@@ -57,3 +57,4 @@ class ConfigurationException implements Exception {
   @override
   String toString() => 'ConfigurationException: $message';
 }
+

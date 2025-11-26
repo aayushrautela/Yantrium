@@ -158,3 +158,4 @@ class ThemeService {
     _colorSchemeName.dispose();
   }
 }
+
