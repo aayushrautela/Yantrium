@@ -3,7 +3,7 @@ import '../models/catalog_item.dart';
 import '../../addons/logic/addon_client.dart';
 import '../../addons/logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';
-import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/tmdb_data_extractor.dart';
 import 'catalog_preferences_repository.dart';
@@ -31,20 +31,34 @@ class CatalogSection {
 /// Repository for fetching catalogs from addons
 class LibraryRepository {
   final AddonRepository _addonRepository;
-  final TmdbService _tmdbService;
   final CatalogPreferencesRepository _catalogPreferencesRepository;
+  
+  // Internal-only catalog IDs that should not be displayed as browseable catalogs
+  static const Set<String> _internalCatalogIds = {
+    'tmdb.search', 
+    'tmdb.language', 
+    'tmdb.year'
+  };
+
+  /// Check if a catalog is internal-only and should be hidden
+  static bool isInternalCatalog(dynamic catalogDef) {
+    final id = catalogDef.id?.toLowerCase() ?? '';
+    // Exact match on ID only
+    return _internalCatalogIds.contains(id);
+  }
 
   LibraryRepository(AppDatabase database)
       : _addonRepository = AddonRepository(database),
-        _tmdbService = TmdbService(),
         _catalogPreferencesRepository = CatalogPreferencesRepository(database);
 
   /// Fetch all catalogs from enabled addons grouped by catalog definition
   /// Returns a list of catalog sections, each representing a catalog from an addon
+  /// All catalogs are loaded in parallel for better performance
   Future<List<CatalogSection>> getCatalogSections() async {
     final enabledAddons = await _addonRepository.getEnabledAddons();
-    final List<CatalogSection> sections = [];
+    final List<Future<CatalogSection?>> catalogFutures = [];
 
+    // Collect all catalog loading futures
     for (final addon in enabledAddons) {
       try {
         final manifest = _addonRepository.getManifest(addon);
@@ -56,63 +70,101 @@ class LibraryRepository {
 
         final client = AddonClient(addon.baseUrl);
 
-        // Fetch catalogs for each catalog definition in manifest
+        // Create futures for all catalogs in parallel
         for (final catalogDef in manifest.catalogs) {
-          try {
-            final catalogId = catalogDef.id?.isEmpty ?? true ? null : catalogDef.id;
-            
-            // Check if this catalog is enabled
-            final isEnabled = await _catalogPreferencesRepository.isCatalogEnabled(
-              addon.id,
-              catalogDef.type,
-              catalogId,
-            );
-            
-            if (!isEnabled) {
-              continue; // Skip disabled catalogs
-            }
-            
-            final result = await client.getCatalog(catalogDef.type, catalogId);
-            final rawItems = result['metas'] as List<CatalogItem>;
-            
-            // Use raw items directly - no TMDB enrichment for catalog items
-            // Only the hero item will be enriched separately
-            if (rawItems.isNotEmpty) {
-              // Create a section title from catalog name or type
-              final title = catalogDef.name ?? 
-                          '${catalogDef.type.capitalize()}${catalogDef.id != null && catalogDef.id!.isNotEmpty ? ' - ${catalogDef.id}' : ''}';
-              
-              sections.add(CatalogSection(
-                title: title,
-                addonName: addon.name,
-                items: rawItems, // Use raw items without TMDB enrichment
-              ));
-            }
-          } catch (e) {
-            // Continue with other catalogs if one fails
-          }
+          catalogFutures.add(_loadCatalogSection(
+            client,
+            addon,
+            catalogDef,
+          ));
         }
       } catch (e) {
         // Continue with other addons if one fails
+        debugPrint('Error processing addon ${addon.id}: $e');
       }
     }
 
-    return sections;
+    // Wait for all catalogs to load in parallel
+    final results = await Future.wait(catalogFutures);
+    return results.whereType<CatalogSection>().toList();
+  }
+
+  /// Load a single catalog section (helper method for parallel loading)
+  Future<CatalogSection?> _loadCatalogSection(
+    AddonClient client,
+    dynamic addon,
+    dynamic catalogDef,
+  ) async {
+    try {
+      // Skip internal-only catalog types that should not be displayed
+      if (isInternalCatalog(catalogDef)) {
+        return null; // Skip internal catalog types
+      }
+      
+      final catalogId = catalogDef.id?.isEmpty ?? true ? null : catalogDef.id;
+      
+      // Check if this catalog is enabled
+      final isEnabled = await _catalogPreferencesRepository.isCatalogEnabled(
+        addon.id,
+        catalogDef.type,
+        catalogId,
+      );
+      
+      if (!isEnabled) {
+        return null; // Skip disabled catalogs
+      }
+      
+      final result = await client.getCatalog(catalogDef.type, catalogId);
+      final rawItems = result['metas'] as List<CatalogItem>;
+      
+      // Use raw items directly - no TMDB enrichment for catalog items
+      // Only the hero item will be enriched separately
+      if (rawItems.isEmpty) {
+        return null;
+      }
+      
+      // Create a section title from catalog name or type
+      final title = catalogDef.name ?? 
+                  '${catalogDef.type.capitalize()}${catalogDef.id != null && catalogDef.id!.isNotEmpty ? ' - ${catalogDef.id}' : ''}';
+      
+      return CatalogSection(
+        title: title,
+        addonName: addon.name,
+        items: rawItems, // Use raw items without TMDB enrichment
+      );
+    } catch (e) {
+      // Return null on error (will be filtered out)
+      debugPrint('Error loading catalog ${catalogDef.type}/${catalogDef.id}: $e');
+      return null;
+    }
   }
 
   /// Get hero items from all hero catalogs (for carousel)
-  Future<List<CatalogItem>> getHeroItems() async {
+  /// [initialEnrichCount] - number of items to enrich immediately, rest are enriched later
+  Future<List<CatalogItem>> getHeroItems({int initialEnrichCount = 1}) async {
     try {
       final heroCatalogs = await _catalogPreferencesRepository.getHeroCatalogs();
       if (heroCatalogs.isEmpty) {
         // Fallback to first section if no hero catalog is set
         final sections = await getCatalogSections();
         if (sections.isNotEmpty && sections[0].items.isNotEmpty) {
-          // Enrich first few items for hero
+          // Enrich only first item initially, rest remain raw
           final items = <CatalogItem>[];
-          for (final item in sections[0].items.take(5)) {
-            final enriched = await enrichItemForHero(item);
-            if (enriched != null) items.add(enriched);
+          final rawItems = sections[0].items.take(5);
+          
+          // Enrich first initialEnrichCount items
+          int enrichedCount = 0;
+          for (final item in rawItems) {
+            if (enrichedCount < initialEnrichCount) {
+              final enriched = await enrichItemForHero(item);
+              if (enriched != null) {
+                items.add(enriched);
+                enrichedCount++;
+              }
+            } else {
+              // Add remaining items as raw (will be enriched later)
+              items.add(item);
+            }
           }
           return items;
         }
@@ -122,6 +174,7 @@ class LibraryRepository {
       // Aggregate items from all hero catalogs
       final allItems = <CatalogItem>[];
       final itemsPerCatalog = (10 / heroCatalogs.length).ceil(); // Distribute items across catalogs
+      int totalEnrichedCount = 0;
 
       for (final heroCatalog in heroCatalogs) {
         try {
@@ -139,10 +192,18 @@ class LibraryRepository {
           final rawItems = result['metas'] as List<CatalogItem>;
           if (rawItems.isEmpty) continue;
 
-          // Enrich items from this catalog
+          // Enrich items from this catalog (only first initialEnrichCount total)
           for (final item in rawItems.take(itemsPerCatalog)) {
-            final enriched = await enrichItemForHero(item);
-            if (enriched != null) allItems.add(enriched);
+            if (totalEnrichedCount < initialEnrichCount) {
+              final enriched = await enrichItemForHero(item);
+              if (enriched != null) {
+                allItems.add(enriched);
+                totalEnrichedCount++;
+              }
+            } else {
+              // Add remaining as raw
+              allItems.add(item);
+            }
           }
         } catch (e) {
           // Continue with other catalogs if one fails
@@ -170,12 +231,12 @@ class LibraryRepository {
     Map<String, dynamic>? cachedTmdbData,
   }) async {
     try {
-      final enrichedData = await _tmdbService.enrichCatalogItem(
+      final enrichedData = await ServiceLocator.instance.tmdbEnrichmentService.enrichCatalogItem(
         item.id,
         item.type,
         cachedTmdbData: cachedTmdbData,
       );
-      
+
       if (enrichedData != null) {
         return CatalogItem.fromJson(enrichedData);
       }
@@ -183,6 +244,29 @@ class LibraryRepository {
     } catch (e) {
       return item; // Return original on error
     }
+  }
+
+  /// Enrich remaining hero items that were left raw during initial load
+  /// Items that already have logos/backgrounds are considered enriched and skipped
+  Future<List<CatalogItem>> enrichRemainingHeroItems(List<CatalogItem> items) async {
+    final enrichedItems = <CatalogItem>[];
+    
+    for (final item in items) {
+      // Check if item is already enriched (has logo or background from TMDB)
+      // Enriched items typically have logos, while raw items from addons don't
+      final isEnriched = item.logo != null && item.logo!.isNotEmpty;
+      
+      if (isEnriched) {
+        enrichedItems.add(item);
+        continue;
+      }
+      
+      // Enrich the raw item
+      final enriched = await enrichItemForHero(item);
+      enrichedItems.add(enriched ?? item);
+    }
+    
+    return enrichedItems;
   }
 
   /// Get cast and crew data for an item (extracts from TMDB enrichment)
@@ -200,18 +284,20 @@ class LibraryRepository {
         int? finalTmdbId = tmdbId;
         
         if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
-          finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+          finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(item.id);
         }
-        
+
         if (finalTmdbId == null) {
           return null;
         }
-        
+
         // Fetch full metadata which includes credits (will use cache if available)
         if (item.type == 'movie') {
-          tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+          final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(finalTmdbId);
+          tmdbData = metadata?.toJson();
         } else if (item.type == 'series') {
-          tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+          final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(finalTmdbId);
+          tmdbData = metadata?.toJson();
         }
       }
       
@@ -262,6 +348,11 @@ class LibraryRepository {
         // Fetch catalogs for each catalog definition in manifest
         for (final catalogDef in manifest.catalogs) {
           try {
+            // Skip internal-only catalog types that should not be displayed
+            if (isInternalCatalog(catalogDef)) {
+              continue; // Skip internal catalog types
+            }
+            
             final catalogId = catalogDef.id?.isEmpty ?? true ? null : catalogDef.id;
             final result = await client.getCatalog(catalogDef.type, catalogId);
             final rawItems = result['metas'] as List<CatalogItem>;
@@ -322,6 +413,11 @@ class LibraryRepository {
 
       for (final catalogDef in manifest.catalogs) {
         try {
+          // Skip internal-only catalog types that should not be displayed
+          if (isInternalCatalog(catalogDef)) {
+            continue; // Skip internal catalog types
+          }
+          
           final catalogId = catalogDef.id?.isEmpty ?? true ? null : catalogDef.id;
           final result = await client.getCatalog(catalogDef.type, catalogId);
           final rawItems = result['metas'] as List<CatalogItem>;
@@ -348,15 +444,26 @@ class LibraryRepository {
 
     try {
       // Search both movies and TV shows from TMDB API
-      final movieResults = await _tmdbService.searchMovies(query);
-      final tvResults = await _tmdbService.searchTv(query);
+      final movieResults = await ServiceLocator.instance.tmdbSearchService.searchMovies(query);
+      final tvResults = await ServiceLocator.instance.tmdbSearchService.searchTv(query);
 
       // Combine and convert to CatalogItem
       final allResults = <CatalogItem>[];
+      final enrichmentService = ServiceLocator.instance.tmdbEnrichmentService;
 
       for (final movieData in movieResults) {
         try {
-          allResults.add(CatalogItem.fromJson(movieData));
+          final tmdbIdStr = 'tmdb:${movieData.id}';
+          allResults.add(CatalogItem.fromJson({
+            'id': tmdbIdStr,
+            'type': 'movie',
+            'name': movieData.title ?? '',
+            'poster': enrichmentService.getImageUrl(movieData.posterPath),
+            'background': enrichmentService.getImageUrl(movieData.backdropPath, size: 'w1280'),
+            'description': movieData.overview,
+            'releaseInfo': movieData.releaseDate,
+            'imdbRating': movieData.voteAverage.toString(),
+          }));
         } catch (e) {
           // Skip invalid items
           continue;
@@ -365,7 +472,17 @@ class LibraryRepository {
 
       for (final tvData in tvResults) {
         try {
-          allResults.add(CatalogItem.fromJson(tvData));
+          final tmdbIdStr = 'tmdb:${tvData.id}';
+          allResults.add(CatalogItem.fromJson({
+            'id': tmdbIdStr,
+            'type': 'series',
+            'name': tvData.name ?? '',
+            'poster': enrichmentService.getImageUrl(tvData.posterPath),
+            'background': enrichmentService.getImageUrl(tvData.backdropPath, size: 'w1280'),
+            'description': tvData.overview,
+            'releaseInfo': tvData.firstAirDate,
+            'imdbRating': tvData.voteAverage.toString(),
+          }));
         } catch (e) {
           // Skip invalid items
           continue;

@@ -2,7 +2,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../constants/app_constants.dart';
 
 /// Persistent navigation header used across all screens
-class PersistentNavigationHeader extends StatelessWidget {
+class PersistentNavigationHeader extends StatefulWidget {
   final int? currentIndex;
   final ValueChanged<int>? onNavigate;
   final bool showBackButton;
@@ -19,6 +19,48 @@ class PersistentNavigationHeader extends StatelessWidget {
   });
 
   @override
+  State<PersistentNavigationHeader> createState() => _PersistentNavigationHeaderState();
+}
+
+class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader> {
+  bool _hasSearchText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.searchController != null) {
+      _hasSearchText = widget.searchController!.text.isNotEmpty;
+      widget.searchController!.addListener(_onSearchChanged);
+    }
+  }
+
+  @override
+  void didUpdateWidget(PersistentNavigationHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchController != widget.searchController) {
+      oldWidget.searchController?.removeListener(_onSearchChanged);
+      if (widget.searchController != null) {
+        _hasSearchText = widget.searchController!.text.isNotEmpty;
+        widget.searchController!.addListener(_onSearchChanged);
+      } else {
+        _hasSearchText = false;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.searchController?.removeListener(_onSearchChanged);
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {
+      _hasSearchText = widget.searchController?.text.isNotEmpty ?? false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       padding: AppConstants.horizontalPadding.copyWith(
@@ -28,9 +70,9 @@ class PersistentNavigationHeader extends StatelessWidget {
       child: Row(
         children: [
           // Back button (if on detail screen)
-          if (showBackButton && onBack != null) ...[
+          if (widget.showBackButton && widget.onBack != null) ...[
             GhostButton(
-              onPressed: onBack,
+              onPressed: widget.onBack,
               density: ButtonDensity.icon,
               child: const Icon(Icons.arrow_back),
             ),
@@ -42,23 +84,23 @@ class PersistentNavigationHeader extends StatelessWidget {
           const SizedBox(width: 32),
           
           // Navigation Links (only show if not on detail screen)
-          if (currentIndex != null && onNavigate != null) ...[
+          if (widget.currentIndex != null && widget.onNavigate != null) ...[
             _NavLink(
               label: 'Home',
-              isActive: currentIndex == 0,
-              onPressed: () => onNavigate!(0),
+              isActive: widget.currentIndex == 0,
+              onPressed: () => widget.onNavigate!(0),
             ),
             const SizedBox(width: 24),
             _NavLink(
               label: 'Library',
-              isActive: currentIndex == 1,
-              onPressed: () => onNavigate!(1),
+              isActive: widget.currentIndex == 1,
+              onPressed: () => widget.onNavigate!(1),
             ),
             const SizedBox(width: 24),
             _NavLink(
               label: 'Settings',
-              isActive: currentIndex == 2,
-              onPressed: () => onNavigate!(2),
+              isActive: widget.currentIndex == 2,
+              onPressed: () => widget.onNavigate!(2),
             ),
           ],
           
@@ -76,9 +118,10 @@ class PersistentNavigationHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: searchController != null
+                  child: widget.searchController != null
                       ? TextField(
-                          controller: searchController,
+                          key: const ValueKey('search_field'),
+                          controller: widget.searchController,
                           placeholder: const Text('Titles, people, genres'),
                         )
                       : TextField(
@@ -86,6 +129,22 @@ class PersistentNavigationHeader extends StatelessWidget {
                           placeholder: const Text('Titles, people, genres'),
                         ),
                 ),
+                if (_hasSearchText && widget.searchController != null) ...[
+                  const SizedBox(width: 8),
+                  Clickable(
+                    onPressed: () {
+                      widget.searchController!.clear();
+                      setState(() {
+                        _hasSearchText = false;
+                      });
+                    },
+                    child: Icon(
+                      Icons.clear,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.mutedForeground,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

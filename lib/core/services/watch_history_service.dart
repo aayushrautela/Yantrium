@@ -1,19 +1,16 @@
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import '../database/app_database.dart';
-import 'trakt_service.dart';
-import 'tmdb_service.dart';
+import 'service_locator.dart';
 import '../../features/library/models/catalog_item.dart';
 import '../../features/library/logic/library_repository.dart';
 
 /// Service for managing watch history from Trakt
 class WatchHistoryService {
   final AppDatabase _database;
-  final TraktService _traktService;
-  final TmdbService _tmdbService;
   late final LibraryRepository _libraryRepository;
 
-  WatchHistoryService(this._database, this._traktService, this._tmdbService) {
+  WatchHistoryService(this._database) {
     _libraryRepository = LibraryRepository(_database);
   }
 
@@ -22,13 +19,13 @@ class WatchHistoryService {
   Future<int> syncWatchHistory({bool forceRefresh = false}) async {
     try {
       // Check if user is authenticated
-      if (!await _traktService.isAuthenticated()) {
+      if (!await ServiceLocator.instance.traktAuthService.isAuthenticated()) {
         debugPrint('User not authenticated, cannot sync watch history');
         return 0;
       }
 
       // Get playback progress (items currently being watched)
-      final progressItems = await _traktService.getPlaybackProgress();
+      final progressItems = await ServiceLocator.instance.traktWatchlistService.getPlaybackProgress();
       
       int syncedCount = 0;
       final now = DateTime.now();
@@ -196,7 +193,7 @@ class WatchHistoryService {
         contentId = 'tmdb:${history.tmdbId}';
       } else if (history.imdbId != null && history.imdbId!.isNotEmpty) {
         // If we only have IMDb ID, try to get TMDB ID first
-        final tmdbId = await _tmdbService.getTmdbIdFromImdb(history.imdbId!);
+        final tmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(history.imdbId!);
         if (tmdbId != null) {
           contentId = 'tmdb:$tmdbId';
         } else {
@@ -213,31 +210,31 @@ class WatchHistoryService {
         final tmdbId = int.tryParse(history.tmdbId!);
         if (tmdbId != null) {
           if (type == 'movie') {
-            final metadata = await _tmdbService.getMovieMetadata(tmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(tmdbId);
             if (metadata != null) {
-              enrichedData = _tmdbService.convertMovieToCatalogItem(metadata, contentId ?? history.traktId);
+              enrichedData = ServiceLocator.instance.tmdbEnrichmentService.convertMovieToCatalogItem(metadata, contentId ?? history.traktId);
             }
           } else if (type == 'episode') {
             // For episodes, fetch the series metadata (not episode metadata)
-            final metadata = await _tmdbService.getTvMetadata(tmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(tmdbId);
             if (metadata != null) {
-              enrichedData = _tmdbService.convertTvToCatalogItem(metadata, contentId ?? history.traktId);
+              enrichedData = ServiceLocator.instance.tmdbEnrichmentService.convertTvToCatalogItem(metadata, contentId ?? history.traktId);
             }
           }
         }
       } else if (history.imdbId != null && history.imdbId!.isNotEmpty) {
         // Try to get TMDB ID from IMDb ID
-        final tmdbId = await _tmdbService.getTmdbIdFromImdb(history.imdbId!);
+        final tmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(history.imdbId!);
         if (tmdbId != null) {
           if (type == 'movie') {
-            final metadata = await _tmdbService.getMovieMetadata(tmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(tmdbId);
             if (metadata != null) {
-              enrichedData = _tmdbService.convertMovieToCatalogItem(metadata, contentId ?? history.traktId);
+              enrichedData = ServiceLocator.instance.tmdbEnrichmentService.convertMovieToCatalogItem(metadata, contentId ?? history.traktId);
             }
           } else if (type == 'episode') {
-            final metadata = await _tmdbService.getTvMetadata(tmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(tmdbId);
             if (metadata != null) {
-              enrichedData = _tmdbService.convertTvToCatalogItem(metadata, contentId ?? history.traktId);
+              enrichedData = ServiceLocator.instance.tmdbEnrichmentService.convertTvToCatalogItem(metadata, contentId ?? history.traktId);
             }
           }
         }

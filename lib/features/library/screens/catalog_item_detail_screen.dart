@@ -11,8 +11,9 @@ import '../logic/library_repository.dart';
 import '../logic/stream_service.dart';
 import '../../player/screens/video_player_screen.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
-import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/tmdb_data_extractor.dart';
 import 'episode_detail_screen.dart';
@@ -34,7 +35,6 @@ class CatalogItemDetailScreen extends StatefulWidget {
 class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   int _selectedTab = 0;
   late final LibraryRepository _libraryRepository;
-  late final TmdbService _tmdbService;
   late final StreamService _streamService;
   CatalogItem? _enrichedItem;
   List<CastCrewMember> _cast = [];
@@ -56,9 +56,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final database = AppDatabase();
+    final database = DatabaseProvider.instance;
     _libraryRepository = LibraryRepository(database);
-    _tmdbService = TmdbService();
     _streamService = StreamService(database);
     _seasonListScrollController = ScrollController();
     _seasonListScrollController.addListener(_checkSeasonScroll);
@@ -118,15 +117,17 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       int? finalTmdbId = tmdbId;
       
       if (finalTmdbId == null && IdParser.isImdbId(widget.item.id)) {
-        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(widget.item.id);
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.item.id);
       }
       
       Map<String, dynamic>? tmdbData;
       if (finalTmdbId != null) {
         if (widget.item.type == 'movie') {
-          tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+          final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(finalTmdbId);
+          tmdbData = metadata?.toJson();
         } else if (widget.item.type == 'series') {
-          tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+          final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(finalTmdbId);
+          tmdbData = metadata?.toJson();
         }
       }
       
@@ -409,9 +410,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     try {
       Map<String, dynamic>? tmdbData;
       if (item.type == 'movie') {
-        tmdbData = await _tmdbService.getMovieMetadata(tmdbId);
+        final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(tmdbId);
+        tmdbData = metadata?.toJson();
       } else if (item.type == 'series') {
-        tmdbData = await _tmdbService.getTvMetadata(tmdbId);
+        final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(tmdbId);
+        tmdbData = metadata?.toJson();
       }
 
       if (tmdbData != null) {
@@ -603,15 +606,17 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         int? finalTmdbId = tmdbId;
         
         if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
-          finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+          finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(item.id);
         }
-        
+
         // Fetch full TMDB metadata to get budget, release_date, runtime, spoken_languages
         if (finalTmdbId != null) {
           if (item.type == 'movie') {
-            tmdbData = await _tmdbService.getMovieMetadata(finalTmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(finalTmdbId);
+            tmdbData = metadata?.toJson();
           } else if (item.type == 'series') {
-            tmdbData = await _tmdbService.getTvMetadata(finalTmdbId);
+            final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(finalTmdbId);
+            tmdbData = metadata?.toJson();
           }
         }
       }
@@ -1159,10 +1164,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       
       // Find the full name of the original language from spoken_languages
       if (originalLanguageData != null && spokenLanguages != null) {
-        final originalLangInfo = spokenLanguages.firstWhere(
+        final matching = spokenLanguages.where(
           (lang) => (lang['iso_639_1'] as String?) == originalLanguageData,
-          orElse: () => null,
-        ) as Map<String, dynamic>?;
+        );
+        final originalLangInfo = matching.isEmpty ? null : matching.first as Map<String, dynamic>?;
         if (originalLangInfo != null) {
           originalLanguageName = originalLangInfo['english_name'] as String?;
         }
@@ -1180,10 +1185,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       
       // Add English if available and different from original
       if (spokenLanguages != null) {
-        final english = spokenLanguages.firstWhere(
+        final matching = spokenLanguages.where(
           (lang) => (lang['english_name'] as String?)?.toLowerCase() == 'english',
-          orElse: () => null,
-        ) as Map<String, dynamic>?;
+        );
+        final english = matching.isEmpty ? null : matching.first as Map<String, dynamic>?;
         
         if (english != null) {
           final englishName = english['english_name'] as String?;
@@ -1578,12 +1583,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       int? finalTmdbId = tmdbId;
 
       if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
-        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(item.id);
       }
 
       if (finalTmdbId != null) {
         // Get all seasons
-        final seasonsData = await _tmdbService.getSeasons(finalTmdbId);
+        final seasonsData = await ServiceLocator.instance.tmdbSearchService.getSeasons(finalTmdbId);
         final List<Season> seasons = [];
 
         for (final seasonData in seasonsData) {
@@ -1593,7 +1598,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
 
           // Fetch episodes for this season
           final episodesData =
-              await _tmdbService.getSeasonEpisodes(finalTmdbId, seasonNumber);
+              await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, seasonNumber);
           if (episodesData != null) {
             final episodesJson =
                 episodesData['episodes'] as List<dynamic>? ?? [];
@@ -1653,17 +1658,27 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       int? finalTmdbId = tmdbId;
 
       if (finalTmdbId == null && IdParser.isImdbId(item.id)) {
-        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(item.id);
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(item.id);
       }
 
       if (finalTmdbId != null) {
-        final similarData =
-            await _tmdbService.getSimilar(finalTmdbId, item.type);
+        final similarResults =
+            await ServiceLocator.instance.tmdbSearchService.getSimilar(finalTmdbId, item.type == 'series' ? 'tv' : 'movie');
         if (mounted) {
           setState(() {
-            _similarItems = similarData
-                .map((data) => CatalogItem.fromJson(data))
-                .toList();
+            _similarItems = similarResults.map((result) {
+              final tmdbIdStr = 'tmdb:${result.id}';
+              return CatalogItem.fromJson({
+                'id': tmdbIdStr,
+                'type': item.type,
+                'name': item.type == 'movie' ? (result.title ?? '') : (result.name ?? ''),
+                'poster': ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(result.posterPath),
+                'background': ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(result.backdropPath, size: 'w1280'),
+                'description': result.overview,
+                'releaseInfo': item.type == 'movie' ? result.releaseDate : result.firstAirDate,
+                'imdbRating': result.voteAverage.toString(),
+              });
+            }).toList();
             _isLoadingSimilar = false;
           });
           return;
@@ -1993,9 +2008,8 @@ class _CastCrewCardState extends State<_CastCrewCard> {
 
   @override
   Widget build(BuildContext context) {
-    final tmdbService = TmdbService();
     final profileImageUrl = widget.member.profileImageUrl != null
-        ? tmdbService.getImageUrl(widget.member.profileImageUrl, size: 'w185')
+        ? ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.member.profileImageUrl, size: 'w185')
         : null;
 
     // Calculate image size as 80% of card width for circular image
@@ -2347,9 +2361,8 @@ class _EpisodeCardState extends State<_EpisodeCard> {
 
   @override
   Widget build(BuildContext context) {
-    final tmdbService = TmdbService();
     final imageUrl = widget.episode.stillPath != null
-        ? tmdbService.getImageUrl(widget.episode.stillPath, size: 'w500')
+        ? ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'w500')
         : null;
 
     return MouseRegion(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/addon_config.dart';
 import '../logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import 'addon_details_screen.dart';
 
@@ -22,7 +23,7 @@ class _AddonsScreenState extends State<AddonsScreen> {
   @override
   void initState() {
     super.initState();
-    _database = AppDatabase();
+    _database = DatabaseProvider.instance;
     _addonRepository = AddonRepository(_database);
     _loadAddons();
   }
@@ -261,7 +262,8 @@ class _AddonsScreenState extends State<AddonsScreen> {
 
   @override
   void dispose() {
-    _database.close();
+    // Note: Don't close the database here - it's a singleton that should remain open
+    // for the app's lifetime. Closing it here would break database access for the entire app.
     super.dispose();
   }
 }

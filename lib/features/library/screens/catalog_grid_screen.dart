@@ -7,6 +7,7 @@ import 'dart:async'; // For Timer
 import '../models/catalog_item.dart';
 import '../logic/library_repository.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/constants/app_constants.dart';
 import 'catalog_item_detail_screen.dart';
@@ -15,6 +16,8 @@ import '../../../core/services/tmdb_data_extractor.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/watch_history_service.dart';
 import '../../../core/services/trakt_service.dart';
+import '../../../core/widgets/smart_image.dart';
+import '../../../core/services/image_preloader.dart';
 
 /// Screen displaying catalogs from all enabled addons in horizontal scrolling lists
 class CatalogGridScreen extends StatefulWidget {
@@ -32,6 +35,7 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   late final WatchHistoryService _watchHistoryService;
   List<CatalogSection> _catalogSections = [];
   bool _isLoading = true;
+  bool _areCatalogsLoaded = false; // Track if catalogs are loaded (for hero navigation blocking)
   String? _error;
   List<CatalogItem> _heroItems = [];
   
@@ -49,11 +53,9 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
   @override
   void initState() {
     super.initState();
-    _database = AppDatabase();
+    _database = DatabaseProvider.instance;
     _libraryRepository = LibraryRepository(_database);
-    final traktService = TraktService(_database);
-    final tmdbService = TmdbService();
-    _watchHistoryService = WatchHistoryService(_database, traktService, tmdbService);
+    _watchHistoryService = WatchHistoryService(_database);
     _searchController = widget.searchController ?? TextEditingController();
     _loadCatalogs();
     _loadContinueWatching();
@@ -192,27 +194,52 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
+      _areCatalogsLoaded = false;
       _error = null;
     });
 
     try {
+      // Load catalogs first (fast operation)
       final sections = await _libraryRepository.getCatalogSections();
       if (!mounted) return;
       
-      // Get hero items from the selected hero catalog
-      final heroItems = await _libraryRepository.getHeroItems();
+      // Load only first hero item initially (fast)
+      final heroItems = await _libraryRepository.getHeroItems(initialEnrichCount: 1);
       
+      // Show catalogs immediately
       setState(() {
         _catalogSections = sections;
         _heroItems = heroItems;
         _isLoading = false;
+        _areCatalogsLoaded = true; // Enable hero navigation after catalogs load
       });
+      
+      // Enrich remaining hero items in background
+      _loadRemainingHeroItems();
+      
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
+        _areCatalogsLoaded = true; // Still enable navigation even on error
       });
+    }
+  }
+
+  Future<void> _loadRemainingHeroItems() async {
+    if (!mounted || _heroItems.length <= 1) return;
+    
+    try {
+      final enrichedItems = await _libraryRepository.enrichRemainingHeroItems(_heroItems);
+      if (mounted) {
+        setState(() {
+          _heroItems = enrichedItems;
+        });
+      }
+    } catch (e) {
+      // If enrichment fails, keep existing items
+      debugPrint('Error enriching remaining hero items: $e');
     }
   }
 
@@ -285,7 +312,10 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
         slivers: [
           // Hero Section
           if (_heroItems.isNotEmpty)
-            _HeroSection(items: _heroItems),
+            _HeroSection(
+              items: _heroItems,
+              enableNavigation: _areCatalogsLoaded,
+            ),
           
           // Continue Watching Section
           if (_continueWatchingItems.isNotEmpty)
@@ -469,7 +499,8 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> {
     if (widget.searchController == null) {
       _searchController.dispose();
     }
-    _database.close();
+    // Note: Don't close the database here - it's a singleton that should remain open
+    // for the app's lifetime. Closing it here would break database access for the entire app.
     super.dispose();
   }
 }
@@ -562,52 +593,14 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                         scale: _isHovered ? 1.1 : 1.0,
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
-                        child: widget.item.poster != null
-                        ? Image.network(
-                            widget.item.poster!,
-                            fit: BoxFit.cover,
-                            width: widget.cardWidth,
-                            height: widget.cardWidth * 1.5,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                              width: widget.cardWidth,
-                              height: widget.cardWidth * 1.5,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.muted,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Text(
-                                    widget.item.name,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.foreground,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                width: widget.cardWidth,
-                                height: widget.cardWidth * 1.5,
-                                color: Theme.of(context).colorScheme.muted,
-                                child: const Center(
-                                    child: material.CircularProgressIndicator()),
-                              );
-                            },
-                          )
-                        : Container(
-                            width: widget.cardWidth,
-                            height: widget.cardWidth * 1.5,
+                        child: SmartImage(
+                          imageUrl: widget.item.poster,
+                          width: widget.cardWidth,
+                          height: widget.cardWidth * 1.5,
+                          fit: BoxFit.cover,
+                          priority: ImagePriority.visible,
+                          borderRadius: BorderRadius.circular(8),
+                          placeholderBuilder: (context) => Container(
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.muted,
                               borderRadius: BorderRadius.circular(8),
@@ -630,6 +623,7 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                               ),
                             ),
                           ),
+                        ),
                       ),
                       // Rating overlay in bottom right corner
                       if (widget.item.imdbRating != null)
@@ -699,8 +693,12 @@ class _SearchResultCardState extends State<_SearchResultCard> {
 /// Hero section with backdrop, logo, and metadata
 class _HeroSection extends StatefulWidget {
   final List<CatalogItem> items;
+  final bool enableNavigation;
 
-  const _HeroSection({required this.items});
+  const _HeroSection({
+    required this.items,
+    this.enableNavigation = true,
+  });
 
   @override
   State<_HeroSection> createState() => _HeroSectionState();
@@ -734,12 +732,31 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
     // Load metadata for initial item
     _loadMetadataForCurrentItem();
     
-    if (widget.items.length > 1) {
+    // Only start auto-rotation if navigation is enabled
+    if (widget.items.length > 1 && widget.enableNavigation) {
       _timer = Timer.periodic(const Duration(seconds: 15), (timer) {
         if (mounted && !_isAnimating) {
           _nextItem();
         }
       });
+    }
+  }
+
+  @override
+  void didUpdateWidget(_HeroSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If navigation was just enabled, start the timer
+    if (!oldWidget.enableNavigation && widget.enableNavigation && widget.items.length > 1) {
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 15), (timer) {
+        if (mounted && !_isAnimating) {
+          _nextItem();
+        }
+      });
+    } else if (oldWidget.enableNavigation && !widget.enableNavigation) {
+      // If navigation was just disabled, stop the timer
+      _timer?.cancel();
+      _timer = null;
     }
   }
   
@@ -809,19 +826,19 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
   }
 
   void _nextItem() {
-    if (widget.items.isEmpty || _isAnimating) return;
+    if (widget.items.isEmpty || _isAnimating || !widget.enableNavigation) return;
     final nextIndex = (_currentIndex + 1) % widget.items.length;
     _goToItem(nextIndex);
   }
 
   void _previousItem() {
-    if (widget.items.isEmpty || _isAnimating) return;
+    if (widget.items.isEmpty || _isAnimating || !widget.enableNavigation) return;
     final prevIndex = (_currentIndex - 1 + widget.items.length) % widget.items.length;
     _goToItem(prevIndex);
   }
 
   void _goToItem(int index) {
-    if (index < 0 || index >= widget.items.length || _isAnimating) return;
+    if (index < 0 || index >= widget.items.length || _isAnimating || !widget.enableNavigation) return;
     
     // Determine direction: forward if index is greater (or wrapping around from end to start)
     // backward if index is less (or wrapping around from start to end)
@@ -855,9 +872,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
       }
     });
     
-    // Reset timer
+    // Reset timer (only if navigation is enabled)
     _timer?.cancel();
-    if (widget.items.length > 1) {
+    if (widget.items.length > 1 && widget.enableNavigation) {
       _timer = Timer.periodic(const Duration(seconds: 15), (timer) {
         if (mounted && !_isAnimating) {
           _nextItem();
@@ -1518,15 +1535,14 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                         scale: _isHovered ? 1.1 : 1.0,
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
-                        child: widget.item.poster != null
-                        ? Image.network(
-                            widget.item.poster!,
-                            fit: BoxFit.cover,
+                        child: SmartImage(
+                          imageUrl: widget.item.poster,
                           width: 240,
                           height: 360,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            width: 240,
-                            height: 360,
+                          fit: BoxFit.cover,
+                          priority: ImagePriority.visible,
+                          borderRadius: BorderRadius.circular(8),
+                          placeholderBuilder: (context) => Container(
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.muted,
                               borderRadius: BorderRadius.circular(8),
@@ -1545,40 +1561,6 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                                     color: Theme.of(context).colorScheme.foreground,
                                     height: 1.2,
                                   ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              width: 240,
-                              height: 360,
-                              color: Theme.of(context).colorScheme.muted,
-                              child: const Center(child: material.CircularProgressIndicator()),
-                            );
-                          },
-                        )
-                      : Container(
-                          width: 240,
-                          height: 360,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.muted,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(
-                                widget.item.name,
-                                textAlign: TextAlign.center,
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.foreground,
-                                  height: 1.2,
                                 ),
                               ),
                             ),
@@ -1871,44 +1853,26 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                   scale: _isHovered ? 1.05 : 1.0,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
-                  child: widget.item.background != null
-                      ? Image.network(
-                          widget.item.background!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Theme.of(context).colorScheme.muted,
-                            child: Center(
-                              child: Text(
-                                widget.item.name,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.foreground,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              color: Theme.of(context).colorScheme.muted,
-                              child: const Center(child: material.CircularProgressIndicator()),
-                            );
-                          },
-                        )
-                      : Container(
-                          color: Theme.of(context).colorScheme.muted,
-                          child: Center(
-                            child: Text(
-                              widget.item.name,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.foreground,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                  child: SmartImage(
+                    imageUrl: widget.item.background,
+                    width: double.infinity,
+                    height: 270,
+                    fit: BoxFit.cover,
+                    priority: ImagePriority.visible,
+                    placeholderBuilder: (context) => Container(
+                      color: Theme.of(context).colorScheme.muted,
+                      child: Center(
+                        child: Text(
+                          widget.item.name,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.foreground,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                      ),
+                    ),
+                  ),
                 ),
                 // Gradient overlay for better logo/text visibility in bottom left corner
                 Positioned.fill(
@@ -2051,3 +2015,4 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
     );
   }
 }
+

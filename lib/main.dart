@@ -3,6 +3,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'features/library/screens/home_screen.dart';
 import 'core/services/oauth_handler.dart';
+import 'core/database/database_provider.dart';
+import 'core/services/service_locator.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +19,11 @@ void main() async {
     // .env file might not exist, continue without it
     // User will need to set it up
   }
-  
+
+  // Initialize database and services
+  final database = DatabaseProvider.instance;
+  await ServiceLocator.instance.initialize(database);
+
   // Initialize OAuth handler to listen for deep links globally
   OAuthHandler().initialize();
   

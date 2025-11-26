@@ -1,0 +1,110 @@
+import '../database/app_database.dart';
+import 'configuration_service.dart';
+import 'logging_service.dart';
+import 'trakt_auth_service.dart';
+import 'trakt_scrobble_service.dart';
+import 'trakt_watchlist_service.dart';
+import 'tmdb_metadata_service.dart';
+import 'tmdb_search_service.dart';
+import 'tmdb_enrichment_service.dart';
+import 'watch_history_service.dart';
+
+/// Service Locator for dependency injection
+class ServiceLocator {
+  static ServiceLocator? _instance;
+  static ServiceLocator get instance {
+    _instance ??= ServiceLocator._();
+    return _instance!;
+  }
+
+  ServiceLocator._();
+
+  AppDatabase? _database;
+  bool _isInitialized = false;
+
+  // Lazy-loaded services
+  TraktAuthService? _traktAuthService;
+  TraktScrobbleService? _traktScrobbleService;
+  TraktWatchlistService? _traktWatchlistService;
+  TmdbMetadataService? _tmdbMetadataService;
+  TmdbSearchService? _tmdbSearchService;
+  TmdbEnrichmentService? _tmdbEnrichmentService;
+  WatchHistoryService? _watchHistoryService;
+
+  /// Initialize the service locator with required dependencies
+  Future<void> initialize(AppDatabase database) async {
+    if (_isInitialized) return;
+
+    _database = database;
+
+    // Validate configuration
+    ConfigurationService.instance.validateConfiguration();
+
+    // Initialize services (lazy loading will happen on first access)
+    _isInitialized = true;
+
+    LoggingService.instance.info('ServiceLocator initialized successfully');
+  }
+
+  /// Get the database instance
+  AppDatabase get database {
+    if (_database == null) {
+      throw StateError('ServiceLocator not initialized. Call initialize() first.');
+    }
+    return _database!;
+  }
+
+  /// Get Trakt authentication service
+  TraktAuthService get traktAuthService {
+    _traktAuthService ??= TraktAuthService(database);
+    return _traktAuthService!;
+  }
+
+  /// Get Trakt scrobble service
+  TraktScrobbleService get traktScrobbleService {
+    _traktScrobbleService ??= TraktScrobbleService(database);
+    return _traktScrobbleService!;
+  }
+
+  /// Get Trakt watchlist service
+  TraktWatchlistService get traktWatchlistService {
+    _traktWatchlistService ??= TraktWatchlistService(database);
+    return _traktWatchlistService!;
+  }
+
+  /// Get TMDB metadata service
+  TmdbMetadataService get tmdbMetadataService {
+    _tmdbMetadataService ??= TmdbMetadataService();
+    return _tmdbMetadataService!;
+  }
+
+  /// Get TMDB search service
+  TmdbSearchService get tmdbSearchService {
+    _tmdbSearchService ??= TmdbSearchService();
+    return _tmdbSearchService!;
+  }
+
+  /// Get TMDB enrichment service
+  TmdbEnrichmentService get tmdbEnrichmentService {
+    _tmdbEnrichmentService ??= TmdbEnrichmentService();
+    return _tmdbEnrichmentService!;
+  }
+
+  /// Get watch history service
+  WatchHistoryService get watchHistoryService {
+    _watchHistoryService ??= WatchHistoryService(database);
+    return _watchHistoryService!;
+  }
+
+  /// Reset all services (useful for testing)
+  void reset() {
+    _traktAuthService = null;
+    _traktScrobbleService = null;
+    _traktWatchlistService = null;
+    _tmdbMetadataService = null;
+    _tmdbSearchService = null;
+    _tmdbEnrichmentService = null;
+    _watchHistoryService = null;
+    _isInitialized = false;
+  }
+}

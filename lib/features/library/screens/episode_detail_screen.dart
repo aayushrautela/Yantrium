@@ -6,9 +6,10 @@ import '../models/stream_info.dart';
 import '../../player/screens/video_player_screen.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
-import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
 import '../logic/stream_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -31,7 +32,6 @@ class EpisodeDetailScreen extends StatefulWidget {
 
 class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   late final StreamService _streamService;
-  late final TmdbService _tmdbService;
   List<Season> _seasons = [];
   int _selectedSeasonNumber = 1;
   bool _isLoadingEpisodes = false;
@@ -43,9 +43,8 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final database = AppDatabase();
+    final database = DatabaseProvider.instance;
     _streamService = StreamService(database);
-    _tmdbService = TmdbService();
     _seasonListScrollController = ScrollController();
     _seasonListScrollController.addListener(_checkSeasonScroll);
     _mainScrollController = ScrollController();
@@ -128,12 +127,12 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       int? finalTmdbId = tmdbId;
 
       if (finalTmdbId == null && IdParser.isImdbId(widget.seriesItem.id)) {
-        finalTmdbId = await _tmdbService.getTmdbIdFromImdb(widget.seriesItem.id);
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.seriesItem.id);
       }
 
       if (finalTmdbId != null) {
         // Get all seasons
-        final seasonsData = await _tmdbService.getSeasons(finalTmdbId);
+        final seasonsData = await ServiceLocator.instance.tmdbSearchService.getSeasons(finalTmdbId);
         final List<Season> seasons = [];
 
         for (final seasonData in seasonsData) {
@@ -143,7 +142,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
 
           // Fetch episodes for this season
           final episodesData =
-              await _tmdbService.getSeasonEpisodes(finalTmdbId, seasonNumber);
+              await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, seasonNumber);
           if (episodesData != null) {
             final episodesJson =
                 episodesData['episodes'] as List<dynamic>? ?? [];
@@ -501,9 +500,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     try {
       Map<String, dynamic>? tmdbData;
       if (item.type == 'movie') {
-        tmdbData = await _tmdbService.getMovieMetadata(tmdbId);
+        final metadata = await ServiceLocator.instance.tmdbMetadataService.getMovieMetadata(tmdbId);
+        tmdbData = metadata?.toJson();
       } else if (item.type == 'series') {
-        tmdbData = await _tmdbService.getTvMetadata(tmdbId);
+        final metadata = await ServiceLocator.instance.tmdbMetadataService.getTvMetadata(tmdbId);
+        tmdbData = metadata?.toJson();
       }
 
       if (tmdbData != null) {
@@ -630,7 +631,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     // Get episode image URL, fallback to show backdrop
     String? backdropUrl;
     if (widget.episode.stillPath != null) {
-      backdropUrl = _tmdbService.getImageUrl(widget.episode.stillPath, size: 'original');
+      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'original');
     } else if (widget.seriesItem.background != null) {
       backdropUrl = widget.seriesItem.background;
     }
@@ -985,9 +986,8 @@ class _EpisodeCardState extends State<_EpisodeCard> {
 
   @override
   Widget build(BuildContext context) {
-    final tmdbService = TmdbService();
     final imageUrl = widget.episode.stillPath != null
-        ? tmdbService.getImageUrl(widget.episode.stillPath, size: 'w500')
+        ? ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'w500')
         : null;
 
     return MouseRegion(

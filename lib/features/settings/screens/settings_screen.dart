@@ -7,11 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../addons/models/addon_config.dart';
 import '../../addons/logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../addons/screens/addon_details_screen.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../library/logic/catalog_preferences_repository.dart';
-import '../../../core/services/trakt_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/services/oauth_handler.dart';
 
 /// Check if the app is running in a Flatpak environment
@@ -85,7 +86,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final AppDatabase _database;
   late final AddonRepository _addonRepository;
   late final CatalogPreferencesRepository _catalogPreferencesRepository;
-  late final TraktService _traktService;
   List<AddonConfig> _addons = [];
   bool _isLoadingAddons = true;
   List<CatalogInfo> _catalogs = [];
@@ -99,10 +99,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _database = AppDatabase();
+    _database = DatabaseProvider.instance;
     _addonRepository = AddonRepository(_database);
     _catalogPreferencesRepository = CatalogPreferencesRepository(_database);
-    _traktService = TraktService(_database);
     _loadAddons();
     _loadCatalogs();
     _checkTraktAuth();
@@ -852,10 +851,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      final isAuthenticated = await _traktService.isAuthenticated();
+      final isAuthenticated = await ServiceLocator.instance.traktAuthService.isAuthenticated();
       String? username;
       if (isAuthenticated) {
-        final user = await _traktService.getCurrentUser();
+        final user = await ServiceLocator.instance.traktAuthService.getCurrentUser();
         username = user?['username'];
       }
       setState(() {
@@ -893,7 +892,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             GhostButton(
               onPressed: () async {
-                final authUrl = _traktService.getAuthorizationUrl();
+                final authUrl = ServiceLocator.instance.traktAuthService.getAuthorizationUrl();
                 await _openUrlInBrowser(authUrl);
               },
               child: const Text('Open Login Page Again'),
@@ -946,7 +945,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     try {
-      final success = await _traktService.exchangeCodeForToken(code);
+      final success = await ServiceLocator.instance.traktAuthService.exchangeCodeForToken(code);
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading dialog
@@ -991,7 +990,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loginTrakt() async {
-    if (!_traktService.isConfigured) {
+    if (!ServiceLocator.instance.traktAuthService.isConfigured) {
       if (mounted) {
         showToast(
           context: context,
@@ -1020,7 +1019,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     try {
-      final authUrl = _traktService.getAuthorizationUrl();
+      final authUrl = ServiceLocator.instance.traktAuthService.getAuthorizationUrl();
       String? code;
 
       // Use platform-specific OAuth flow
@@ -1059,7 +1058,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
 
-        final success = await _traktService.exchangeCodeForToken(code);
+        final success = await ServiceLocator.instance.traktAuthService.exchangeCodeForToken(code);
 
         if (mounted) {
           Navigator.of(context).pop(); // Close loading dialog
@@ -1163,7 +1162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true) {
-      await _traktService.logout();
+      await ServiceLocator.instance.traktAuthService.logout();
       setState(() {
         _isTraktAuthenticated = false;
         _traktUsername = null;
@@ -1189,7 +1188,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _database.close();
+    // Note: Don't close the database here - it's a singleton that should remain open
+    // for the app's lifetime. Closing it here would break database access for the entire app.
     super.dispose();
   }
 }

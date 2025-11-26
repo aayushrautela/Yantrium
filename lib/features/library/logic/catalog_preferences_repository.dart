@@ -2,12 +2,13 @@ import 'package:drift/drift.dart';
 import '../../../core/database/app_database.dart';
 import '../../addons/models/addon_manifest.dart';
 import '../../addons/logic/addon_repository.dart';
+import 'library_repository.dart';
 
 /// Repository for managing catalog preferences
 class CatalogPreferencesRepository {
   final AppDatabase _database;
   final AddonRepository _addonRepository;
-
+  
   CatalogPreferencesRepository(this._database)
       : _addonRepository = AddonRepository(_database);
 
@@ -50,6 +51,11 @@ class CatalogPreferencesRepository {
         }
 
         for (final catalogDef in manifest.catalogs) {
+          // Skip internal-only catalog types that should not be displayed
+          if (LibraryRepository.isInternalCatalog(catalogDef)) {
+            continue; // Skip internal catalog types
+          }
+          
           final catalogId = catalogDef.id?.isEmpty ?? true ? null : catalogDef.id;
           final preference = await getPreference(addon.id, catalogDef.type, catalogId);
           

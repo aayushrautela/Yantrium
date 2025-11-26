@@ -1,7 +1,7 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'dart:async';
 import '../models/catalog_item.dart';
-import '../../../core/services/tmdb_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/persistent_navigation_header.dart';
 import 'catalog_item_detail_screen.dart';
@@ -21,7 +21,6 @@ class SearchOverlay extends StatefulWidget {
 
 class _SearchOverlayState extends State<SearchOverlay> {
   late final TextEditingController _searchController;
-  late final TmdbService _tmdbService;
   List<CatalogItem> _results = [];
   bool _isSearching = false;
   bool _hasText = false;
@@ -31,7 +30,6 @@ class _SearchOverlayState extends State<SearchOverlay> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery);
-    _tmdbService = TmdbService();
     _hasText = widget.initialQuery.isNotEmpty;
     
     if (widget.initialQuery.isNotEmpty) {
@@ -74,15 +72,26 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
     try {
       // Search both movies and TV shows from TMDB API
-      final movieResults = await _tmdbService.searchMovies(query);
-      final tvResults = await _tmdbService.searchTv(query);
+      final movieResults = await ServiceLocator.instance.tmdbSearchService.searchMovies(query);
+      final tvResults = await ServiceLocator.instance.tmdbSearchService.searchTv(query);
       
       // Combine and convert to CatalogItem
       final allResults = <CatalogItem>[];
+      final enrichmentService = ServiceLocator.instance.tmdbEnrichmentService;
       
       for (final movieData in movieResults) {
         try {
-          allResults.add(CatalogItem.fromJson(movieData));
+          final tmdbIdStr = 'tmdb:${movieData.id}';
+          allResults.add(CatalogItem.fromJson({
+            'id': tmdbIdStr,
+            'type': 'movie',
+            'name': movieData.title ?? '',
+            'poster': enrichmentService.getImageUrl(movieData.posterPath),
+            'background': enrichmentService.getImageUrl(movieData.backdropPath, size: 'w1280'),
+            'description': movieData.overview,
+            'releaseInfo': movieData.releaseDate,
+            'imdbRating': movieData.voteAverage.toString(),
+          }));
         } catch (e) {
           // Skip invalid items
           continue;
@@ -91,7 +100,17 @@ class _SearchOverlayState extends State<SearchOverlay> {
       
       for (final tvData in tvResults) {
         try {
-          allResults.add(CatalogItem.fromJson(tvData));
+          final tmdbIdStr = 'tmdb:${tvData.id}';
+          allResults.add(CatalogItem.fromJson({
+            'id': tmdbIdStr,
+            'type': 'series',
+            'name': tvData.name ?? '',
+            'poster': enrichmentService.getImageUrl(tvData.posterPath),
+            'background': enrichmentService.getImageUrl(tvData.backdropPath, size: 'w1280'),
+            'description': tvData.overview,
+            'releaseInfo': tvData.firstAirDate,
+            'imdbRating': tvData.voteAverage.toString(),
+          }));
         } catch (e) {
           // Skip invalid items
           continue;
