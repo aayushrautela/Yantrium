@@ -46,3 +46,6 @@ if command -v ldd >/dev/null 2>&1; then
 else
     echo "ldd not available, skipping dependency check"
 fi
+
+
+

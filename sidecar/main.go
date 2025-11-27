@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,80 +16,10 @@ import (
 )
 
 type TorrentServer struct {
-	client    *torrent.Client
-	port      int
-	streamPort int
+	client        *torrent.Client
+	port          int
+	streamPort    int
 	activeTorrents map[string]*torrent.Torrent
-	streamManagers map[string]*StreamManager
-}
-
-type StreamManager struct {
-	torrent         *torrent.Torrent
-	fileIndex       int
-	currentPosition int64  // Current playback position in bytes
-	bufferAheadSize int64  // How much data to keep buffered ahead (20MB default)
-	lastUpdate      time.Time
-}
-
-func NewStreamManager(t *torrent.Torrent, fileIndex int) *StreamManager {
-	return &StreamManager{
-		torrent:         t,
-		fileIndex:       fileIndex,
-		currentPosition: 0,
-		bufferAheadSize: 20 * 1024 * 1024, // 20MB buffer
-		lastUpdate:      time.Now(),
-	}
-}
-
-// UpdatePlaybackPosition updates the current playback position and adjusts piece priorities
-func (sm *StreamManager) UpdatePlaybackPosition(positionBytes int64) {
-	sm.currentPosition = positionBytes
-	sm.lastUpdate = time.Now()
-	sm.prioritizePieces()
-}
-
-// prioritizePieces sets download priorities to maintain streaming performance
-func (sm *StreamManager) prioritizePieces() {
-	file := sm.torrent.Files()[sm.fileIndex]
-	fileSize := file.Length()
-
-	// Calculate which pieces we need for current position + buffer
-	bytesNeeded := sm.currentPosition + sm.bufferAheadSize
-	if bytesNeeded > fileSize {
-		bytesNeeded = fileSize
-	}
-
-	// Convert bytes to piece indices
-	pieceLength := int64(sm.torrent.Info().PieceLength)
-	startPiece := int(sm.currentPosition / pieceLength)
-	endPiece := int((bytesNeeded + pieceLength - 1) / pieceLength) // Round up
-
-	if endPiece >= sm.torrent.NumPieces() {
-		endPiece = sm.torrent.NumPieces() - 1
-	}
-
-	// Prioritize pieces sequentially from current position
-	for i := startPiece; i <= endPiece && i < sm.torrent.NumPieces(); i++ {
-		sm.torrent.Piece(i).SetPriority(torrent.PiecePriorityNormal)
-	}
-
-	// High priority for immediate next pieces (first 5 pieces ahead)
-	immediateEnd := startPiece + 5
-	if immediateEnd > endPiece {
-		immediateEnd = endPiece
-	}
-	for i := startPiece; i <= immediateEnd && i < sm.torrent.NumPieces(); i++ {
-		sm.torrent.Piece(i).SetPriority(torrent.PiecePriorityHigh)
-	}
-
-	// Now prioritize (but don't cancel) the pieces right after our buffer
-	bufferEnd := endPiece + 10 // Next 10 pieces at normal priority (lowest)
-	for i := endPiece + 1; i <= bufferEnd && i < sm.torrent.NumPieces(); i++ {
-		sm.torrent.Piece(i).SetPriority(torrent.PiecePriorityNormal)
-	}
-
-	log.Printf("StreamManager: Prioritized pieces %d-%d (high), %d-%d (normal), %d-%d (normal)",
-		startPiece, immediateEnd, immediateEnd+1, endPiece, endPiece+1, bufferEnd)
 }
 
 type AddMagnetRequest struct {
@@ -100,12 +31,6 @@ type AddMagnetResponse struct {
 	StreamURL string `json:"streamUrl"`
 	TorrentID string `json:"torrentId"`
 	Files     []FileInfo `json:"files"`
-}
-
-type UpdatePositionRequest struct {
-	TorrentID     string `json:"torrentId"`
-	FileIndex     int    `json:"fileIndex"`
-	PositionBytes int64  `json:"positionBytes"`
 }
 
 type FileInfo struct {
@@ -141,18 +66,26 @@ func NewTorrentServer(port, streamPort int) *TorrentServer {
 	// Limit connections to prevent network choking
 	config.EstablishedConnsPerTorrent = 50
 	config.HalfOpenConnsPerTorrent = 10
+	
+	// Use port 0 to let OS assign an available port (avoids conflicts)
+	// Or use a high port that's less likely to conflict
+	config.ListenPort = 0 // 0 = OS picks available port
 
 	client, err := torrent.NewClient(config)
 	if err != nil {
 		log.Fatal("Failed to create torrent client:", err)
 	}
+	
+	// Log the actual port that was assigned
+	if actualPort := client.LocalPort(); actualPort != 0 {
+		log.Printf("Torrent client listening on port %d", actualPort)
+	}
 
 	return &TorrentServer{
-		client:         client,
-		port:           port,
-		streamPort:     streamPort,
+		client:        client,
+		port:          port,
+		streamPort:    streamPort,
 		activeTorrents: make(map[string]*torrent.Torrent),
-		streamManagers: make(map[string]*StreamManager),
 	}
 }
 
@@ -176,12 +109,15 @@ func (ts *TorrentServer) handleAddMagnet(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Wait for torrent info
+	// Wait for torrent info with longer timeout for real-world scenarios
+	// Some torrents take time to fetch metadata from DHT/bootstrap nodes
+	log.Printf("Waiting for torrent metadata...")
 	select {
 	case <-t.GotInfo():
 		log.Printf("Got info for torrent: %s", t.Info().Name)
-	case <-time.After(30 * time.Second):
-		http.Error(w, "Timeout waiting for torrent info", http.StatusRequestTimeout)
+	case <-time.After(120 * time.Second): // Increased to 2 minutes
+		log.Printf("Timeout waiting for torrent info after 120 seconds")
+		http.Error(w, "Timeout waiting for torrent info (120s). The torrent may have few seeders or network issues.", http.StatusRequestTimeout)
 		return
 	}
 
@@ -215,12 +151,8 @@ func (ts *TorrentServer) handleAddMagnet(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Create stream manager for this torrent
-	streamManager := NewStreamManager(t, streamFileIndex)
-	ts.streamManagers[torrentID] = streamManager
-
-	// Start with sequential download - prioritize first pieces for immediate playback
-	streamManager.prioritizePieces()
+	// Let anacrolix handle piece prioritization automatically based on active readers
+	// When we create a file reader later, anacrolix will prioritize pieces intelligently
 
 	streamURL := fmt.Sprintf("http://localhost:%d/stream/%s/%d", ts.streamPort, torrentID, streamFileIndex)
 
@@ -268,27 +200,6 @@ func (ts *TorrentServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (ts *TorrentServer) handleUpdatePosition(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req UpdatePositionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	streamManager, exists := ts.streamManagers[req.TorrentID]
-	if !exists {
-		http.Error(w, "Stream manager not found", http.StatusNotFound)
-		return
-	}
-
-	streamManager.UpdatePlaybackPosition(req.PositionBytes)
-	w.WriteHeader(http.StatusOK)
-}
 
 func (ts *TorrentServer) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -305,10 +216,6 @@ func (ts *TorrentServer) handleRemoveTorrent(w http.ResponseWriter, r *http.Requ
 	if t, exists := ts.activeTorrents[torrentID]; exists {
 		t.Drop()
 		delete(ts.activeTorrents, torrentID)
-
-		// Clean up stream manager
-		delete(ts.streamManagers, torrentID)
-
 		w.WriteHeader(http.StatusOK)
 	} else {
 		http.Error(w, "Torrent not found", http.StatusNotFound)
@@ -350,23 +257,86 @@ func (ts *TorrentServer) startStreamingServer() {
 
 		file := files[fileIndex]
 
-		// Set appropriate headers
-		w.Header().Set("Content-Type", "video/mp4")
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Content-Length", strconv.FormatInt(file.Length(), 10))
-
-		// Handle range requests for seeking
-		if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
-			// Basic range request handling
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", file.Length()-1, file.Length()))
-			w.WriteHeader(http.StatusPartialContent)
-		}
-
-		// Stream the file
+		// Manual streaming for torrent compatibility
+		// This avoids http.ServeContent's assumptions about file readers
 		reader := file.NewReader()
 		defer reader.Close()
 
-		http.ServeContent(w, r, file.Path(), time.Time{}, reader)
+		fileSize := file.Length()
+		contentType := "video/mp4" // Default to MP4 for video players
+
+		// Detect content type from file extension
+		fileName := strings.ToLower(file.Path())
+		if strings.HasSuffix(fileName, ".mkv") {
+			contentType = "video/x-matroska"
+		} else if strings.HasSuffix(fileName, ".avi") {
+			contentType = "video/x-msvideo"
+		} else if strings.HasSuffix(fileName, ".mov") {
+			contentType = "video/quicktime"
+		}
+
+		// Set headers
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
+		w.Header().Set("Cache-Control", "no-cache")
+
+		// Handle range requests
+		statusCode := http.StatusOK
+		var start, end int64 = 0, fileSize - 1
+
+		if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+			// Parse range header (e.g., "bytes=0-1023")
+			if strings.HasPrefix(rangeHeader, "bytes=") {
+				rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
+				if strings.Contains(rangeSpec, "-") {
+					parts := strings.Split(rangeSpec, "-")
+					if len(parts) == 2 {
+						if parts[0] != "" {
+							if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+								start = parsed
+							}
+						}
+						if parts[1] != "" {
+							if parsed, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+								end = parsed
+							}
+						}
+						statusCode = http.StatusPartialContent
+						w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+						w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
+					}
+				}
+			}
+		}
+
+		w.WriteHeader(statusCode)
+
+		// Seek to start position if needed
+		if start > 0 {
+			if seeker, ok := reader.(io.Seeker); ok {
+				if _, err := seeker.Seek(start, io.SeekStart); err != nil {
+					log.Printf("Failed to seek to position %d: %v", start, err)
+					return
+				}
+			}
+		}
+
+		// Stream the data
+		if statusCode == http.StatusPartialContent {
+			// For range requests, only send the requested bytes
+			bytesToSend := end - start + 1
+			if bytesToSend > 0 {
+				if _, err := io.CopyN(w, reader, bytesToSend); err != nil && err != io.EOF {
+					log.Printf("Error streaming range request: %v", err)
+				}
+			}
+		} else {
+			// Send the entire file
+			if _, err := io.Copy(w, reader); err != nil && err != io.EOF {
+				log.Printf("Error streaming file: %v", err)
+			}
+		}
 	})
 
 	log.Printf("Starting streaming server on port %d", ts.streamPort)
@@ -385,7 +355,6 @@ func (ts *TorrentServer) Start() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/add", ts.handleAddMagnet)
 	mux.HandleFunc("/status", ts.handleStatus)
-	mux.HandleFunc("/position", ts.handleUpdatePosition)
 	mux.HandleFunc("/remove/", ts.handleRemoveTorrent)
 
 	log.Printf("Starting torrent API server on port %d", ts.port)
@@ -397,6 +366,9 @@ func (ts *TorrentServer) Close() {
 }
 
 func main() {
+	// Set log output to stdout instead of stderr (default)
+	log.SetOutput(os.Stdout)
+
 	port := 8080
 	streamPort := 8081
 
@@ -418,3 +390,6 @@ func main() {
 	log.Printf("Torrent sidecar starting - API: %d, Stream: %d", port, streamPort)
 	server.Start()
 }
+
+
+
