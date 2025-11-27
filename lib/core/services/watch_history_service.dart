@@ -40,6 +40,7 @@ class WatchHistoryService {
   /// Returns the number of items synced
   /// Uses incremental syncing by default - only fetches items since last sync
   /// Set forceRefresh=true to do a full sync of all history
+  /// On first launch (no lastSyncTimestamp), automatically does a full sync
   Future<int> syncWatchHistory({bool forceRefresh = false}) async {
     try {
       // Check if user is authenticated
@@ -56,7 +57,9 @@ class WatchHistoryService {
 
       // Determine sync strategy
       final lastSyncTimestamp = await getLastSyncTimestamp();
-      final shouldDoIncrementalSync = !forceRefresh && lastSyncTimestamp != null;
+      // Do full sync if: forceRefresh is true OR this is first time (no lastSyncTimestamp)
+      final isFullSync = forceRefresh || lastSyncTimestamp == null;
+      final shouldDoIncrementalSync = !isFullSync;
 
       List<TraktHistoryItem> allHistoryItems = [];
 
@@ -87,7 +90,11 @@ class WatchHistoryService {
         debugPrint('Fetched ${allHistoryItems.length} total history items since last sync');
       } else {
         // Full sync: fetch ALL history (no date filter) with pagination
-        debugPrint('Performing full sync of all watch history');
+        if (lastSyncTimestamp == null) {
+          debugPrint('Performing full sync (first time) - fetching all watch history');
+        } else {
+          debugPrint('Performing full sync (force refresh) - fetching all watch history');
+        }
         
         int page = 1;
         const int limit = 100; // Trakt API limit per page
@@ -111,12 +118,17 @@ class WatchHistoryService {
         debugPrint('Fetched ${allHistoryItems.length} total history items (full sync)');
       }
 
+      // Collect all Trakt IDs from the response (for deletion detection during full sync)
+      final Set<String> traktIdsFromResponse = {};
+      
       // Process playback progress items (0-100% progress)
       int progressItemsSynced = 0;
       int progressItemsUpdated = 0;
       for (final item in progressItems) {
         try {
           final traktId = _extractTraktId(item);
+          traktIdsFromResponse.add(traktId); // Track for deletion detection
+          
           final type = item['type'] as String? ?? 'movie';
           final progress = item['progress'] as double? ?? 0.0;
           final pausedAt = item['paused_at'] != null 
@@ -200,6 +212,8 @@ class WatchHistoryService {
         try {
           // History items represent completed watches (scrobbles)
           final traktId = _extractTraktIdFromHistory(item);
+          traktIdsFromResponse.add(traktId); // Track for deletion detection
+          
           final type = item.type;
           final watchedAt = item.watchedAt;
           final action = item.action;
@@ -273,13 +287,44 @@ class WatchHistoryService {
       }
       debugPrint('Synced $historyItemsSynced new history items (updated $historyItemsUpdated items)');
 
+      // During full sync, detect and remove items deleted from Trakt website
+      int deletedCount = 0;
+      if (isFullSync) {
+        debugPrint('Full sync: Detecting items deleted from Trakt website...');
+        
+        // Get all local watch history items
+        final localItems = await _database.getAllWatchHistory();
+        
+        // Find items in local DB that are NOT in Trakt response
+        // Only delete items that were synced from Trakt (not local-only items)
+        for (final localItem in localItems) {
+          // Skip local-only items (they start with "local:")
+          if (localItem.traktId.startsWith('local:')) {
+            continue;
+          }
+          
+          // If this item is not in the Trakt response, it was deleted from Trakt
+          if (!traktIdsFromResponse.contains(localItem.traktId)) {
+            await _database.deleteWatchHistory(localItem.traktId);
+            deletedCount++;
+            debugPrint('Deleted item from local DB (removed from Trakt): ${localItem.traktId} - ${localItem.title}');
+          }
+        }
+        
+        if (deletedCount > 0) {
+          debugPrint('Removed $deletedCount items from local DB that were deleted from Trakt website');
+        } else {
+          debugPrint('No deletions detected - local DB is in sync with Trakt');
+        }
+      }
+
       // Update the last sync timestamp if sync was successful
-      if (syncedCount > 0 || historyItemsUpdated > 0 || progressItemsUpdated > 0 || shouldDoIncrementalSync) {
+      if (syncedCount > 0 || historyItemsUpdated > 0 || progressItemsUpdated > 0 || deletedCount > 0 || shouldDoIncrementalSync) {
         await setLastSyncTimestamp(now);
         debugPrint('Updated last sync timestamp to ${now.toIso8601String()}');
       }
 
-      debugPrint('Total synced: $syncedCount new items ($progressItemsSynced playback + $historyItemsSynced history), Updated: ${progressItemsUpdated + historyItemsUpdated} items');
+      debugPrint('Total synced: $syncedCount new items ($progressItemsSynced playback + $historyItemsSynced history), Updated: ${progressItemsUpdated + historyItemsUpdated} items, Deleted: $deletedCount items');
       return syncedCount;
     } catch (e) {
       debugPrint('Error syncing watch history: $e');
@@ -331,50 +376,125 @@ class WatchHistoryService {
   }
 
   /// Get continue watching items (0% to 80% progress)
-  /// For series, only returns the latest episode (assumes previous ones are watched)
+  /// For series, finds the latest watched episode per show (by watchedAt timestamp)
+  /// Assumes all episodes up to the latest watched one are watched
+  /// Only returns episodes with 0-80% progress (in-progress items)
   Future<List<WatchHistoryData>> getContinueWatching() async {
-    final allItems = await _database.getContinueWatching(
+    // Get all in-progress items (0-80% progress) for movies
+    final inProgressItems = await _database.getContinueWatching(
       minProgress: 0.0,
       maxProgress: 80.0,
     );
     
     // Separate movies and episodes
-    final movies = allItems.where((item) => item.type == 'movie').toList();
-    final episodes = allItems.where((item) => item.type == 'episode').toList();
+    final movies = inProgressItems.where((item) => item.type == 'movie').toList();
+    final inProgressEpisodes = inProgressItems.where((item) => item.type == 'episode').toList();
     
-    // For episodes, group by TMDB ID (show ID) and only keep the latest episode per show
-    final Map<String, WatchHistoryData> latestEpisodes = {};
+    // Get ALL watched episodes (including 100% watched) to find the latest per show
+    final allWatchedEpisodes = await _database.getAllWatchHistory();
+    final allEpisodes = allWatchedEpisodes.where((item) => item.type == 'episode').toList();
+    
+    // Group all episodes by show ID and find the latest watched episode per show
+    // Latest is determined by watchedAt timestamp (most recent watch time)
+    final Map<String, WatchHistoryData> latestWatchedByShow = {};
     final List<WatchHistoryData> episodesWithoutTmdbId = [];
     
-    for (final episode in episodes) {
+    for (final episode in allEpisodes) {
       if (episode.tmdbId == null || episode.tmdbId!.isEmpty) {
-        // If no TMDB ID, keep it separately (can't group)
-        episodesWithoutTmdbId.add(episode);
+        // If no TMDB ID, we can't group by show, so keep in-progress ones separately
+        if (episode.progress >= 0.0 && episode.progress <= 80.0) {
+          episodesWithoutTmdbId.add(episode);
+        }
         continue;
       }
       
       final showId = episode.tmdbId!;
-      final existing = latestEpisodes[showId];
+      final existing = latestWatchedByShow[showId];
       
-      // Keep the episode with the highest season/episode number
+      // Keep the episode with the most recent watchedAt timestamp
+      // This handles cases where episode 13 is watched but episode 10 is not
+      // We'll use episode 13 as the "latest watched" reference
       if (existing == null) {
-        latestEpisodes[showId] = episode;
+        latestWatchedByShow[showId] = episode;
       } else {
-        // Compare season and episode numbers
-        final existingSeason = existing.seasonNumber ?? 0;
-        final existingEpisode = existing.episodeNumber ?? 0;
-        final currentSeason = episode.seasonNumber ?? 0;
-        final currentEpisode = episode.episodeNumber ?? 0;
+        // Compare by watchedAt timestamp (most recent = latest)
+        if (episode.watchedAt.isAfter(existing.watchedAt)) {
+          latestWatchedByShow[showId] = episode;
+        } else if (episode.watchedAt.isAtSameMomentAs(existing.watchedAt)) {
+          // If same timestamp, prefer the one with higher season/episode number
+          final existingSeason = existing.seasonNumber ?? 0;
+          final existingEpisode = existing.episodeNumber ?? 0;
+          final currentSeason = episode.seasonNumber ?? 0;
+          final currentEpisode = episode.episodeNumber ?? 0;
+          
+          if (currentSeason > existingSeason || 
+              (currentSeason == existingSeason && currentEpisode > existingEpisode)) {
+            latestWatchedByShow[showId] = episode;
+          }
+        }
+      }
+    }
+    
+    // Now, for each show, find the in-progress episode that matches or comes after the latest watched
+    final Map<String, WatchHistoryData> continueWatchingEpisodes = {};
+    
+    for (final showId in latestWatchedByShow.keys) {
+      final latestWatched = latestWatchedByShow[showId]!;
+      final latestSeason = latestWatched.seasonNumber ?? 0;
+      final latestEpisode = latestWatched.episodeNumber ?? 0;
+      
+      // Find in-progress episodes for this show
+      final showInProgressEpisodes = inProgressEpisodes.where((ep) => 
+        ep.tmdbId == showId
+      ).toList();
+      
+      if (showInProgressEpisodes.isEmpty) {
+        // No in-progress episodes for this show, skip it
+        continue;
+      }
+      
+      // Find the episode that is the latest watched or comes after it
+      // This handles the case where episode 13 is watched (100%) but we want to show
+      // episode 14 if it's in progress, or episode 13 if it's still in progress
+      WatchHistoryData? bestEpisode;
+      
+      for (final episode in showInProgressEpisodes) {
+        final epSeason = episode.seasonNumber ?? 0;
+        final epNumber = episode.episodeNumber ?? 0;
         
-        if (currentSeason > existingSeason || 
-            (currentSeason == existingSeason && currentEpisode > existingEpisode)) {
-          latestEpisodes[showId] = episode;
+        // Check if this episode is at or after the latest watched episode
+        final isAfterLatest = epSeason > latestSeason || 
+            (epSeason == latestSeason && epNumber >= latestEpisode);
+        
+        if (isAfterLatest || (epSeason == latestSeason && epNumber == latestEpisode)) {
+          if (bestEpisode == null) {
+            bestEpisode = episode;
+          } else {
+            // Prefer the one with higher season/episode number
+            final bestSeason = bestEpisode.seasonNumber ?? 0;
+            final bestEpisodeNum = bestEpisode.episodeNumber ?? 0;
+            
+            if (epSeason > bestSeason || 
+                (epSeason == bestSeason && epNumber > bestEpisodeNum)) {
+              bestEpisode = episode;
+            }
+          }
+        }
+      }
+      
+      // If we found a suitable episode, add it
+      if (bestEpisode != null) {
+        continueWatchingEpisodes[showId] = bestEpisode;
+      } else {
+        // If no episode after latest watched, check if latest watched itself is in progress
+        if (latestWatched.progress >= 0.0 && latestWatched.progress <= 80.0) {
+          continueWatchingEpisodes[showId] = latestWatched;
         }
       }
     }
     
     // Combine movies with filtered episodes (grouped by show) and episodes without TMDB ID
-    return [...movies, ...latestEpisodes.values, ...episodesWithoutTmdbId];
+    return [...movies, ...continueWatchingEpisodes.values, ...episodesWithoutTmdbId];
   }
 
   /// Convert watch history item to CatalogItem for display
