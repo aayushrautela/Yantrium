@@ -46,20 +46,14 @@ class TorrentService {
       _isRunning = true;
 
       // Listen to output for debugging
+      // All logs now go to stdout, so we only need to listen to stdout
       _sidecarProcess!.stdout.transform(utf8.decoder).listen((data) {
         debugPrint('TorrentSidecar: $data');
       });
 
+      // Listen to stderr for any remaining critical errors (should be rare now)
       _sidecarProcess!.stderr.transform(utf8.decoder).listen((data) {
-        // Check if this is actually a warning rather than a critical error
-        if (data.contains('[WRN]') || data.contains('WRN ') ||
-            data.contains('announce failed') || data.contains('network is unreachable')) {
-          // These are warnings about network connectivity, not actual errors
-          debugPrint('TorrentSidecar WARNING: $data');
-        } else {
-          // Actual errors that should be logged as such
-          debugPrint('TorrentSidecar ERROR: $data');
-        }
+        debugPrint('TorrentSidecar ERROR: $data');
       });
 
       // Monitor for crashes

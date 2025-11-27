@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	alog "github.com/anacrolix/log"
 	"github.com/anacrolix/torrent"
 )
 
@@ -52,6 +53,19 @@ type TorrentStatus struct {
 	UploadSpeed   int64 `json:"uploadSpeed"`
 }
 
+// createStdoutLogger creates an anacrolix logger that writes to stdout
+func createStdoutLogger() alog.Logger {
+	logger := alog.NewLogger("torrent")
+	handler := alog.StreamHandler{
+		W: os.Stdout,
+		Fmt: func(r alog.Record) []byte {
+			return []byte(fmt.Sprintf("[TorrentClient] %s\n", r.Msg.String()))
+		},
+	}
+	logger.SetHandlers(handler)
+	return logger
+}
+
 func NewTorrentServer(port, streamPort int) *TorrentServer {
 	// Create data directory
 	dataDir := filepath.Join(os.TempDir(), "yatrium-torrents")
@@ -66,10 +80,13 @@ func NewTorrentServer(port, streamPort int) *TorrentServer {
 	// Limit connections to prevent network choking
 	config.EstablishedConnsPerTorrent = 50
 	config.HalfOpenConnsPerTorrent = 10
-	
+
 	// Use port 0 to let OS assign an available port (avoids conflicts)
 	// Or use a high port that's less likely to conflict
 	config.ListenPort = 0 // 0 = OS picks available port
+
+	// Redirect anacrolix/torrent logs to stdout to prevent them from being treated as errors
+	config.Logger = createStdoutLogger()
 
 	client, err := torrent.NewClient(config)
 	if err != nil {
