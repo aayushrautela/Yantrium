@@ -411,26 +411,19 @@ class WatchHistoryService {
       final showId = episode.tmdbId!;
       final existing = latestWatchedByShow[showId];
       
-      // Keep the episode with the most recent watchedAt timestamp
-      // This handles cases where episode 13 is watched but episode 10 is not
-      // We'll use episode 13 as the "latest watched" reference
+      // Keep the episode with the highest season/episode number
+      // This ensures that if a later episode is watched, previous ones are not considered "latest"
       if (existing == null) {
         latestWatchedByShow[showId] = episode;
       } else {
-        // Compare by watchedAt timestamp (most recent = latest)
-        if (episode.watchedAt.isAfter(existing.watchedAt)) {
+        final existingSeason = existing.seasonNumber ?? 0;
+        final existingEpisode = existing.episodeNumber ?? 0;
+        final currentSeason = episode.seasonNumber ?? 0;
+        final currentEpisode = episode.episodeNumber ?? 0;
+        
+        if (currentSeason > existingSeason || 
+            (currentSeason == existingSeason && currentEpisode > existingEpisode)) {
           latestWatchedByShow[showId] = episode;
-        } else if (episode.watchedAt.isAtSameMomentAs(existing.watchedAt)) {
-          // If same timestamp, prefer the one with higher season/episode number
-          final existingSeason = existing.seasonNumber ?? 0;
-          final existingEpisode = existing.episodeNumber ?? 0;
-          final currentSeason = episode.seasonNumber ?? 0;
-          final currentEpisode = episode.episodeNumber ?? 0;
-          
-          if (currentSeason > existingSeason || 
-              (currentSeason == existingSeason && currentEpisode > existingEpisode)) {
-            latestWatchedByShow[showId] = episode;
-          }
         }
       }
     }
