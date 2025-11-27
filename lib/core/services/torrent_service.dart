@@ -54,10 +54,34 @@ class TorrentService {
         debugPrint('TorrentSidecar ERROR: $data');
       });
 
-      // Wait a moment for the server to start
-      await Future.delayed(const Duration(seconds: 1));
+      // Monitor for crashes
+      _sidecarProcess!.exitCode.then((exitCode) {
+        if (exitCode != 0) {
+          debugPrint('TorrentService: Sidecar crashed with exit code $exitCode');
+          _isRunning = false;
+        }
+      });
 
-      debugPrint('TorrentService: Sidecar started successfully');
+      // Wait a moment for the server to start
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Health check - verify the API server is responding
+      try {
+        final response = await http.get(
+          Uri.parse('http://localhost:$apiPort/status'),
+        ).timeout(const Duration(seconds: 2));
+        
+        if (response.statusCode == 200) {
+          debugPrint('TorrentService: Sidecar started successfully');
+        } else {
+          throw Exception('Sidecar health check failed: ${response.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('TorrentService: Sidecar health check failed: $e');
+        _isRunning = false;
+        await stop();
+        throw Exception('Sidecar failed to start properly. Check logs for details.');
+      }
     } catch (e) {
       debugPrint('TorrentService: Failed to start sidecar: $e');
       _isRunning = false;
@@ -118,36 +142,6 @@ class TorrentService {
     return (data['torrents'] as List).cast<Map<String, dynamic>>();
   }
 
-  /// Update playback position for streaming optimization
-  Future<void> updatePosition(String torrentId, int fileIndex, int positionBytes) async {
-    try {
-      await _ensureRunning();
-
-      final request = {
-        'torrentId': torrentId,
-        'fileIndex': fileIndex,
-        'positionBytes': positionBytes,
-      };
-
-      final response = await http.post(
-        Uri.parse('http://localhost:$apiPort/position'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(request),
-      );
-
-      if (response.statusCode != 200) {
-        if (kDebugMode) {
-          debugPrint('TorrentService: Position update failed: ${response.body}');
-        }
-        // Don't throw - position updates are not critical
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('TorrentService: Position update error: $e');
-      }
-      // Don't throw - position updates are not critical
-    }
-  }
 
   /// Remove a torrent by ID
   Future<void> removeTorrent(String torrentId) async {
@@ -257,3 +251,6 @@ class TorrentService {
     stop();
   }
 }
+
+
+
