@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import 'configuration_service.dart';
 import 'id_parser.dart';
 import 'tmdb_data_extractor.dart';
 
@@ -26,10 +26,11 @@ class TmdbService {
   static const Duration _cacheTtl = Duration(minutes: 5);
 
   TmdbService() {
-    _apiKey = dotenv.env['TMDB_API_KEY'] ?? '';
-    final baseUrl = dotenv.env['TMDB_BASE_URL'] ?? 'https://api.themoviedb.org/3';
-    _imageBaseUrl = dotenv.env['TMDB_IMAGE_BASE_URL'] ?? 'https://image.tmdb.org/t/p';
-    
+    final config = ConfigurationService.instance;
+    _apiKey = config.tmdbApiKey;
+    final baseUrl = config.tmdbBaseUrl;
+    _imageBaseUrl = config.tmdbImageBaseUrl;
+
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       queryParameters: {
