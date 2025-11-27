@@ -10,15 +10,81 @@ class ConfigurationService {
 
   ConfigurationService._();
 
-  // API Keys - check if dotenv is initialized first
-  String get traktClientId => dotenv.isInitialized ? (dotenv.env['TRAKT_CLIENT_ID'] ?? '') : '';
-  String get traktClientSecret => dotenv.isInitialized ? (dotenv.env['TRAKT_CLIENT_SECRET'] ?? '') : '';
-  String get traktRedirectUri => dotenv.isInitialized ? (dotenv.env['TRAKT_REDIRECT_URI'] ?? 'yantrium://auth/trakt') : 'yantrium://auth/trakt';
-  String get tmdbApiKey => dotenv.isInitialized ? (dotenv.env['TMDB_API_KEY'] ?? '') : '';
+  // API Keys - Priority: dart-define (--dart-define) > .env file > empty
+  String get traktClientId {
+    // Check compile-time constants first (from --dart-define)
+    final envKey = String.fromEnvironment('TRAKT_CLIENT_ID');
+    if (envKey.isNotEmpty) return envKey;
+    
+    // Then check .env file
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TRAKT_CLIENT_ID'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return '';
+  }
+
+  String get traktClientSecret {
+    final envKey = String.fromEnvironment('TRAKT_CLIENT_SECRET');
+    if (envKey.isNotEmpty) return envKey;
+    
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TRAKT_CLIENT_SECRET'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return '';
+  }
+
+  String get traktRedirectUri {
+    final envKey = String.fromEnvironment('TRAKT_REDIRECT_URI');
+    if (envKey.isNotEmpty) return envKey;
+    
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TRAKT_REDIRECT_URI'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return 'yantrium://auth/trakt';
+  }
+
+  String get tmdbApiKey {
+    final envKey = String.fromEnvironment('TMDB_API_KEY');
+    if (envKey.isNotEmpty) return envKey;
+    
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TMDB_API_KEY'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return '';
+  }
 
   // TMDB Configuration
-  String get tmdbBaseUrl => dotenv.isInitialized ? (dotenv.env['TMDB_BASE_URL'] ?? 'https://api.themoviedb.org/3') : 'https://api.themoviedb.org/3';
-  String get tmdbImageBaseUrl => dotenv.isInitialized ? (dotenv.env['TMDB_IMAGE_BASE_URL'] ?? 'https://image.tmdb.org/t/p') : 'https://image.tmdb.org/t/p';
+  String get tmdbBaseUrl {
+    final envKey = String.fromEnvironment('TMDB_BASE_URL');
+    if (envKey.isNotEmpty) return envKey;
+    
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TMDB_BASE_URL'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return 'https://api.themoviedb.org/3';
+  }
+
+  String get tmdbImageBaseUrl {
+    final envKey = String.fromEnvironment('TMDB_IMAGE_BASE_URL');
+    if (envKey.isNotEmpty) return envKey;
+    
+    if (dotenv.isInitialized) {
+      final dotEnvKey = dotenv.env['TMDB_IMAGE_BASE_URL'];
+      if (dotEnvKey != null && dotEnvKey.isNotEmpty) return dotEnvKey;
+    }
+    
+    return 'https://image.tmdb.org/t/p';
+  }
 
   // Cache Configuration
   Duration get tmdbCacheTtl => const Duration(minutes: 5);

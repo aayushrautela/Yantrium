@@ -45,8 +45,53 @@ jobs:
     - name: Create Windows platform support
       run: flutter create --platforms=windows .
 
+    - name: Verify API keys are available
+      run: |
+        echo "🔐 Verifying API keys for embedding..."
+        
+        TMDB_KEY="${{ secrets.TMDB_API_KEY }}"
+        TRAKT_ID="${{ secrets.TRAKT_CLIENT_ID }}"
+        TRAKT_SECRET="${{ secrets.TRAKT_CLIENT_SECRET }}"
+        
+        if [ -z "$TMDB_KEY" ]; then
+          echo "❌ ERROR: TMDB_API_KEY secret is not set!"
+          exit 1
+        else
+          TMDB_LEN=${#TMDB_KEY}
+          echo "✅ TMDB_API_KEY is set (length: $TMDB_LEN characters)"
+        fi
+        
+        if [ -z "$TRAKT_ID" ]; then
+          echo "❌ ERROR: TRAKT_CLIENT_ID secret is not set!"
+          exit 1
+        else
+          TRAKT_ID_LEN=${#TRAKT_ID}
+          echo "✅ TRAKT_CLIENT_ID is set (length: $TRAKT_ID_LEN characters)"
+        fi
+        
+        if [ -z "$TRAKT_SECRET" ]; then
+          echo "❌ ERROR: TRAKT_CLIENT_SECRET secret is not set!"
+          exit 1
+        else
+          TRAKT_SECRET_LEN=${#TRAKT_SECRET}
+          echo "✅ TRAKT_CLIENT_SECRET is set (length: $TRAKT_SECRET_LEN characters)"
+        fi
+        
+        echo "✅ All API keys verified! Keys will be embedded via --dart-define flags."
+        echo "📦 Building with embedded API keys..."
+      shell: bash
+
     - name: Build Windows ${{ inputs.build_type }}
-      run: flutter build windows --${{ inputs.build_type }}
+      run: |
+        echo "🔨 Starting build with embedded API keys..."
+        echo "   Build type: ${{ inputs.build_type }}"
+        echo "   Using --dart-define flags for API key injection"
+        flutter build windows --${{ inputs.build_type }} \
+          --dart-define=TMDB_API_KEY=${{ secrets.TMDB_API_KEY }} \
+          --dart-define=TRAKT_CLIENT_ID=${{ secrets.TRAKT_CLIENT_ID }} \
+          --dart-define=TRAKT_CLIENT_SECRET=${{ secrets.TRAKT_CLIENT_SECRET }}
+        echo "✅ Build completed with embedded API keys"
+      shell: bash
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
