@@ -6,6 +6,8 @@ import '../logic/fvp_player_controller.dart';
 import '../../../core/widgets/back_button_overlay.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/watch_history_service.dart';
+import '../../../core/services/trakt_scrobble_service.dart';
+import '../../../core/models/trakt_models.dart';
 
 /// Video player screen with FVP integration and custom controls
 class VideoPlayerScreen extends StatefulWidget {
@@ -51,24 +53,45 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Timer? _progressSaveTimer;
   bool _isFullscreen = false;
   late final WatchHistoryService _watchHistoryService;
+  late final TraktScrobbleService _traktScrobbleService;
+  late final TraktContentData _traktContentData;
+  Timer? _traktScrobbleTimer;
+  bool _hasStartedTraktScrobble = false;
 
   @override
   void initState() {
     super.initState();
     _watchHistoryService = ServiceLocator.instance.watchHistoryService;
+    _traktScrobbleService = ServiceLocator.instance.traktScrobbleService;
+
+    // Create Trakt content data for scrobbling
+    _traktContentData = TraktContentData(
+      type: widget.isMovie ? 'movie' : 'episode',
+      imdbId: widget.imdbId ?? '',
+      title: widget.title ?? 'Unknown',
+      year: 0, // We don't have year information, could be added later
+      season: widget.seasonNumber,
+      episode: widget.episodeNumber,
+      showTitle: widget.isMovie ? null : widget.title,
+      showYear: widget.isMovie ? null : 0,
+      showImdbId: widget.isMovie ? null : widget.imdbId,
+    );
+
     _controller = FvpPlayerController();
     _startPlayback();
-    // Listen to playing state to manage auto-hide timer
+    // Listen to playing state to manage auto-hide timer and Trakt scrobbling
     _controller.playingStream.listen((isPlaying) {
       if (isPlaying) {
         // When playing starts, start the auto-hide timer
         _startAutoHideTimer();
         _startProgressTracking();
+        _startTraktScrobbling();
       } else {
         // When paused, cancel timer and ensure paused overlay is visible
         // (paused overlay is always shown, independent of _showControls)
         _cancelAutoHideTimer();
         _stopProgressTracking();
+        _pauseTraktScrobbling();
         // Save progress when paused
         _saveProgress();
         // Don't modify _showControls when paused - paused overlay doesn't depend on it
@@ -80,6 +103,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void dispose() {
     _saveProgress(); // Save progress when closing
     _stopProgressTracking();
+    _stopTraktScrobbling(); // Stop Trakt scrobbling when closing
     _cancelAutoHideTimer();
     _controlsTimer?.cancel();
     _controller.dispose();
@@ -98,6 +122,60 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _stopProgressTracking() {
     _progressSaveTimer?.cancel();
     _progressSaveTimer = null;
+  }
+
+  /// Start Trakt scrobbling when playback begins
+  void _startTraktScrobbling() {
+    // Only start if we have valid IMDb ID and haven't started yet
+    if (_traktContentData.imdbId.isEmpty || _hasStartedTraktScrobble) {
+      return;
+    }
+
+    // Start Trakt scrobbling
+    _traktScrobbleService.scrobbleStart(_traktContentData, 0.1); // Start with minimal progress
+    _hasStartedTraktScrobble = true;
+
+    // Set up periodic scrobble updates every 5 minutes (300 seconds)
+    _traktScrobbleTimer?.cancel();
+    _traktScrobbleTimer = Timer.periodic(const Duration(seconds: 300), (_) {
+      _updateTraktProgress();
+    });
+  }
+
+  /// Pause Trakt scrobbling when playback is paused
+  void _pauseTraktScrobbling() {
+    if (!_hasStartedTraktScrobble) return;
+
+    _updateTraktProgress(); // Update progress before pausing
+    _traktScrobbleTimer?.cancel();
+    _traktScrobbleTimer = null;
+  }
+
+  /// Stop Trakt scrobbling when closing the player
+  void _stopTraktScrobbling() {
+    if (!_hasStartedTraktScrobble) return;
+
+    _traktScrobbleTimer?.cancel();
+    _traktScrobbleTimer = null;
+
+    // Calculate final progress and stop scrobbling
+    final progress = _controller.duration > 0
+        ? _controller.position / _controller.duration
+        : 0.0;
+
+    _traktScrobbleService.scrobbleStop(_traktContentData, progress * 100);
+    _hasStartedTraktScrobble = false;
+  }
+
+  /// Update Trakt progress during playback
+  void _updateTraktProgress() {
+    if (!_hasStartedTraktScrobble || !_controller.isPlaying) return;
+
+    final progress = _controller.duration > 0
+        ? (_controller.position / _controller.duration) * 100
+        : 0.0;
+
+    _traktScrobbleService.scrobblePause(_traktContentData, progress);
   }
 
   Future<void> _saveProgress() async {

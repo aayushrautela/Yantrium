@@ -96,6 +96,19 @@ class ConfigurationService {
   String get traktTokenUrl => '$traktBaseUrl/oauth/token';
   String get traktApiVersion => '2';
 
+  // Trakt Scrobbling Configuration
+  int get defaultTraktCompletionThreshold {
+    // Allow override via environment variable, default to 80%
+    final envValue = String.fromEnvironment('TRAKT_COMPLETION_THRESHOLD');
+    if (envValue.isNotEmpty) {
+      final parsed = int.tryParse(envValue);
+      if (parsed != null && parsed >= 50 && parsed <= 100) {
+        return parsed;
+      }
+    }
+    return 80; // Default 80% completion threshold
+  }
+
   // HTTP Configuration
   Duration get httpTimeout => const Duration(seconds: 30);
   int get maxRetries => 3;

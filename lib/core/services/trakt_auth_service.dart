@@ -5,26 +5,18 @@ import '../database/app_database.dart';
 import '../models/trakt_models.dart';
 import 'configuration_service.dart';
 import 'logging_service.dart';
+import 'trakt_core_service.dart';
 
 /// Service for Trakt authentication operations
 class TraktAuthService {
   final AppDatabase _database;
   final LoggingService _logger = LoggingService.instance;
   final ConfigurationService _config = ConfigurationService.instance;
-
-  late final Dio _dio;
+  final TraktCoreService _coreService = TraktCoreService.instance;
 
   TraktAuthService(this._database) {
-    _dio = Dio(BaseOptions(
-      baseUrl: _config.traktBaseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'trakt-api-version': _config.traktApiVersion,
-        'trakt-api-key': _config.traktClientId,
-      },
-      connectTimeout: _config.httpTimeout,
-      receiveTimeout: _config.httpTimeout,
-    ));
+    // Initialize core service with database
+    _coreService.setDatabase(_database);
   }
 
   /// Check if Trakt is configured (has client ID and secret)
@@ -42,38 +34,12 @@ class TraktAuthService {
 
   /// Check if user is authenticated
   Future<bool> isAuthenticated() async {
-    final auth = await _database.getTraktAuth();
-    if (auth == null) {
-      _logger.debug('No Trakt auth found in database');
-      return false;
-    }
-
-    // Check if token is expired
-    if (auth.expiresAt.isBefore(DateTime.now())) {
-      _logger.debug('Trakt token expired, attempting refresh');
-      // Try to refresh token
-      return await refreshToken();
-    }
-
-    return true;
+    return await _coreService.isAuthenticated();
   }
 
   /// Get current access token, refreshing if necessary
   Future<String?> getAccessToken() async {
-    final auth = await _database.getTraktAuth();
-    if (auth == null) return null;
-
-    // Check if token is expired or about to expire (within 5 minutes)
-    if (auth.expiresAt.isBefore(DateTime.now().add(const Duration(minutes: 5)))) {
-      _logger.debug('Trakt token expiring soon, refreshing');
-      final refreshed = await refreshToken();
-      if (!refreshed) return null;
-      // Get the updated auth after refresh
-      final updatedAuth = await _database.getTraktAuth();
-      return updatedAuth?.accessToken;
-    }
-
-    return auth.accessToken;
+    return await _coreService.getAccessToken();
   }
 
   /// Exchange authorization code for access token
@@ -94,7 +60,8 @@ class TraktAuthService {
         'grant_type': 'authorization_code',
       };
 
-      final response = await _dio.post(
+      // Use Dio directly for token exchange since core service requires auth
+      final response = await Dio().post(
         _config.traktTokenUrl,
         data: requestData,
         options: Options(
@@ -142,63 +109,7 @@ class TraktAuthService {
 
   /// Refresh the access token using refresh token
   Future<bool> refreshToken() async {
-    try {
-      final auth = await _database.getTraktAuth();
-      if (auth == null || auth.refreshToken.isEmpty) {
-        _logger.debug('No refresh token available');
-        return false;
-      }
-
-      _logger.debug('Refreshing Trakt access token');
-
-      final response = await _dio.post(
-        _config.traktTokenUrl,
-        data: {
-          'refresh_token': auth.refreshToken,
-          'client_id': _config.traktClientId,
-          'client_secret': _config.traktClientSecret,
-          'redirect_uri': _config.traktRedirectUri,
-          'grant_type': 'refresh_token',
-        },
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'trakt-api-version': _config.traktApiVersion,
-            'trakt-api-key': _config.traktClientId,
-          },
-        ),
-      );
-
-      final data = response.data as Map<String, dynamic>;
-      final accessToken = data['access_token'] as String;
-      final newRefreshToken = data['refresh_token'] as String;
-      final expiresIn = data['expires_in'] as int;
-
-      final expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
-
-      await _database.upsertTraktAuth(
-        TraktAuthCompanion.insert(
-          accessToken: accessToken,
-          refreshToken: newRefreshToken,
-          expiresIn: expiresIn,
-          createdAt: DateTime.now(),
-          expiresAt: expiresAt,
-          username: Value(auth.username),
-          slug: Value(auth.slug),
-        ),
-      );
-
-      _logger.info('Successfully refreshed Trakt token');
-      return true;
-    } catch (e) {
-      _logger.error('Error refreshing token', e);
-      if (e is DioException) {
-        _logger.debug('Dio error response: ${e.response?.data}');
-      }
-      // If refresh fails, user needs to re-authenticate
-      await logout();
-      return false;
-    }
+    return await _coreService.initializeAuth(); // This will handle token refresh
   }
 
   /// Get current authenticated user information
@@ -223,17 +134,21 @@ class TraktAuthService {
   /// Logout user (remove tokens)
   Future<void> logout() async {
     _logger.debug('Logging out Trakt user');
-    await _database.deleteTraktAuth();
+    await _coreService.logout();
   }
 
   /// Get user information from Trakt API
   Future<Map<String, String>?> _getUserInfo(String accessToken) async {
     try {
-      final response = await _dio.get(
-        '/users/settings',
+      // Use Dio directly since this is for initial setup
+      final response = await Dio().get(
+        '${_config.traktBaseUrl}/users/settings',
         options: Options(
           headers: {
             'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+            'trakt-api-version': _config.traktApiVersion,
+            'trakt-api-key': _config.traktClientId,
           },
         ),
       );

@@ -1,6 +1,7 @@
 import '../database/app_database.dart';
 import 'configuration_service.dart';
 import 'logging_service.dart';
+import 'trakt_core_service.dart';
 import 'trakt_auth_service.dart';
 import 'trakt_scrobble_service.dart';
 import 'trakt_watchlist_service.dart';
@@ -24,6 +25,7 @@ class ServiceLocator {
   bool _isInitialized = false;
 
   // Lazy-loaded services
+  TraktCoreService? _traktCoreService;
   TraktAuthService? _traktAuthService;
   TraktScrobbleService? _traktScrobbleService;
   TraktWatchlistService? _traktWatchlistService;
@@ -63,6 +65,13 @@ class ServiceLocator {
       throw StateError('ServiceLocator not initialized. Call initialize() first.');
     }
     return _database!;
+  }
+
+  /// Get Trakt core service
+  TraktCoreService get traktCoreService {
+    _traktCoreService ??= TraktCoreService.instance;
+    _traktCoreService!.setDatabase(database);
+    return _traktCoreService!;
   }
 
   /// Get Trakt authentication service
@@ -137,6 +146,10 @@ class ServiceLocator {
       _tmdbMetadataService = null;
 
       // Dispose Trakt services
+      if (_traktCoreService != null) {
+        _traktCoreService!.dispose();
+        _traktCoreService = null;
+      }
       _traktWatchlistService = null;
       _traktScrobbleService = null;
       _traktAuthService = null;
@@ -159,6 +172,7 @@ class ServiceLocator {
 
   /// Reset all services (useful for testing)
   void reset() {
+    _traktCoreService = null;
     _traktAuthService = null;
     _traktScrobbleService = null;
     _traktWatchlistService = null;

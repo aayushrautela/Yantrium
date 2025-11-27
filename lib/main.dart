@@ -127,6 +127,9 @@ class _YantriumAppState extends State<YantriumApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
+    // Handle Trakt service lifecycle changes
+    ServiceLocator.instance.traktCoreService.handleAppStateChange(state);
+
     // Perform graceful shutdown when app is detached (being terminated)
     if (state == AppLifecycleState.detached && !_shutdownPerformed) {
       _shutdownPerformed = true;
