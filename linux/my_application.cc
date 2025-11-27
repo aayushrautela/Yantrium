@@ -7,12 +7,26 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+#include <signal.h>
+#include <unistd.h>
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlView* view;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// Global pointer to the application instance for signal handling
+static MyApplication* global_app = nullptr;
+
+// Signal handler for graceful shutdown
+static void signal_handler(int signum) {
+  if (global_app != nullptr) {
+    g_application_quit(G_APPLICATION(global_app));
+  }
+}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -57,6 +71,9 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
+  // Store view reference for shutdown cleanup
+  self->view = view;
+
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
@@ -64,7 +81,20 @@ static void my_application_activate(GApplication* application) {
 
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
-  //MyApplication* self = MY_APPLICATION(object);
+  MyApplication* self = MY_APPLICATION(application);
+
+  // Set global app pointer for signal handling
+  global_app = self;
+
+  // Register signal handlers for graceful shutdown
+  struct sigaction sa;
+  sa.sa_handler = signal_handler;
+  sa.sa_flags = 0;
+  sigemptyset(&sa.sa_mask);
+
+  // Handle SIGTERM (sent by systemd/init) and SIGINT (Ctrl+C)
+  sigaction(SIGTERM, &sa, nullptr);
+  sigaction(SIGINT, &sa, nullptr);
 
   // Perform any actions required at application startup.
 
@@ -73,7 +103,22 @@ static void my_application_startup(GApplication* application) {
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  //MyApplication* self = MY_APPLICATION(object);
+  // Give Flutter some time to cleanup (up to 5 seconds)
+  // This allows the Dart side to perform asynchronous cleanup when the app lifecycle changes
+  GDateTime* start_time = g_date_time_new_now_local();
+  while (g_date_time_difference(g_date_time_new_now_local(), start_time) < 5000000) { // 5 seconds in microseconds
+    // Process any remaining events
+    while (g_main_context_iteration(nullptr, FALSE)) {
+      // Continue processing
+    }
+
+    // Small delay to avoid busy waiting
+    g_usleep(10000); // 10ms
+  }
+  g_date_time_unref(start_time);
+
+  // Clear global app pointer
+  global_app = nullptr;
 
   // Perform any actions required at application shutdown.
 
@@ -84,6 +129,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  self->view = nullptr;  // View is owned by GTK, don't free it here
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

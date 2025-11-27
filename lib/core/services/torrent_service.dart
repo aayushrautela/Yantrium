@@ -89,17 +89,31 @@ class TorrentService {
     }
   }
 
-  /// Stop the torrent sidecar process
+  /// Stop the torrent sidecar process gracefully
   Future<void> stop() async {
     if (!_isRunning || _sidecarProcess == null) return;
 
     try {
-      _sidecarProcess!.kill();
-      await _sidecarProcess!.exitCode.timeout(const Duration(seconds: 5));
+      // First try to terminate gracefully (SIGTERM)
+      _sidecarProcess!.kill(ProcessSignal.sigterm);
+
+      // Wait for the process to exit gracefully, but with a timeout
+      final exitCode = await _sidecarProcess!.exitCode.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          // If it doesn't exit gracefully, force kill it
+          debugPrint('TorrentService: Sidecar did not exit gracefully, force killing...');
+          _sidecarProcess!.kill(ProcessSignal.sigkill);
+          return -1; // Force kill exit code
+        },
+      );
+
       _isRunning = false;
-      debugPrint('TorrentService: Sidecar stopped');
+      debugPrint('TorrentService: Sidecar stopped with exit code $exitCode');
     } catch (e) {
       debugPrint('TorrentService: Error stopping sidecar: $e');
+      // Ensure it's marked as not running even on error
+      _isRunning = false;
     }
   }
 

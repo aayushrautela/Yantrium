@@ -113,6 +113,50 @@ class ServiceLocator {
     return _libraryService!;
   }
 
+  /// Dispose all services for graceful shutdown
+  Future<void> dispose() async {
+    if (!_isInitialized) return;
+
+    // Dispose services in reverse order of initialization
+    try {
+      // Dispose library service first as it depends on others
+      if (_libraryService != null) {
+        // Note: LibraryService doesn't have a dispose method yet
+        _libraryService = null;
+      }
+
+      // Dispose watch history service
+      if (_watchHistoryService != null) {
+        // Note: WatchHistoryService doesn't have a dispose method yet
+        _watchHistoryService = null;
+      }
+
+      // Dispose TMDB services
+      _tmdbEnrichmentService = null;
+      _tmdbSearchService = null;
+      _tmdbMetadataService = null;
+
+      // Dispose Trakt services
+      _traktWatchlistService = null;
+      _traktScrobbleService = null;
+      _traktAuthService = null;
+
+      // Close database last
+      if (_database != null) {
+        await _database!.close();
+        _database = null;
+      }
+
+      _isInitialized = false;
+
+      LoggingService.instance.info('ServiceLocator disposed gracefully');
+    } catch (e) {
+      LoggingService.instance.error('Error during ServiceLocator disposal', e);
+      // Continue with disposal even if some services fail
+      _isInitialized = false;
+    }
+  }
+
   /// Reset all services (useful for testing)
   void reset() {
     _traktAuthService = null;
