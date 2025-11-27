@@ -28,12 +28,21 @@ class StreamInfo {
   });
 
   factory StreamInfo.fromJson(Map<String, dynamic> json) {
+    // Handle Torrentio-style streams that use infoHash instead of direct URL
+    String url;
+    final infoHash = json['infoHash'] as String?;
+    if (infoHash != null) {
+      url = 'magnet:?xt=urn:btih:$infoHash';
+    } else {
+      url = json['url'] as String;
+    }
+
     return StreamInfo(
       id: json['id'] as String?,
       title: json['title'] as String?,
       name: json['name'] as String?,
       description: json['description'] as String?,
-      url: json['url'] as String,
+      url: url,
       quality: json['quality'] as String?,
       type: json['type'] as String?,
       subtitles: json['subtitles'] != null

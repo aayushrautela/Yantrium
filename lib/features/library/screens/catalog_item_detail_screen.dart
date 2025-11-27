@@ -2764,22 +2764,33 @@ class _StreamSelectionDialog extends StatelessWidget {
   });
 
   String _getStreamDisplayName(StreamInfo stream) {
+    // If title looks like a detailed description (contains newlines or is long),
+    // use it directly as addons like Torrentio provide nicely formatted descriptions
+    if (stream.title != null && stream.title!.isNotEmpty) {
+      final title = stream.title!.trim();
+      // Check if title contains newlines or looks like a full description
+      if (title.contains('\n') || title.length > 50) {
+        return title.replaceAll('\n', ' '); // Replace newlines with spaces for single line display
+      }
+    }
+
+    // Fall back to reconstructing from individual fields for simple titles
     final parts = <String>[];
-    
+
     if (stream.name != null && stream.name!.isNotEmpty) {
       parts.add(stream.name!);
     } else if (stream.title != null && stream.title!.isNotEmpty) {
       parts.add(stream.title!);
     }
-    
+
     if (stream.quality != null && stream.quality!.isNotEmpty) {
       parts.add(stream.quality!);
     }
-    
+
     if (stream.addonName != null && stream.addonName!.isNotEmpty) {
       parts.add('(${stream.addonName})');
     }
-    
+
     return parts.isNotEmpty ? parts.join(' • ') : 'Stream';
   }
 
