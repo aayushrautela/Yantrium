@@ -2364,6 +2364,35 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                     ),
                   ),
                 ),
+                // Up Next Badge (only for episodes with 0% progress, implying they are unreleased/upcoming)
+                if (widget.item.type == 'series' && widget.progress == 0.0)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: material.Colors.black.withOpacity(0.4),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'UP NEXT',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primaryForeground,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
                 // Logo overlay (bottom left) - replaced by episode info on hover
                 // Use fixed-size container to prevent layout shifts
                 Positioned(

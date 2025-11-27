@@ -482,12 +482,100 @@ class WatchHistoryService {
         // If no episode after latest watched, check if latest watched itself is in progress
         if (latestWatched.progress >= 0.0 && latestWatched.progress <= 80.0) {
           continueWatchingEpisodes[showId] = latestWatched;
+        } else if (latestWatched.progress > 80.0) {
+          // If latest watched is finished, check if there's a next episode available
+          // This handles "Up Next" logic for shows where we finished the last episode
+          // but a new one might be available (e.g. next episode in season, or S1E1 finished -> S1E2)
+          try {
+            if (latestWatched.tmdbId != null && latestWatched.seasonNumber != null && latestWatched.episodeNumber != null) {
+              final tmdbId = int.tryParse(latestWatched.tmdbId!);
+              final currentSeason = latestWatched.seasonNumber!;
+              final currentEpisode = latestWatched.episodeNumber!;
+              
+              if (tmdbId != null) {
+                // Fetch season details to see if there's a next episode
+                final seasonData = await ServiceLocator.instance.tmdbMetadataService.getTvSeason(tmdbId, currentSeason);
+                
+                if (seasonData != null) {
+                  // Check if there's a next episode in this season
+                  final nextEpisodeNum = currentEpisode + 1;
+                  final hasNextEpisode = seasonData.episodes.any((e) => e.episodeNumber == nextEpisodeNum);
+                  
+                  if (hasNextEpisode) {
+                    // Create a synthetic item for the next episode
+                    final nextEpisodeData = seasonData.episodes.firstWhere((e) => e.episodeNumber == nextEpisodeNum);
+                    
+                    // Create synthetic item for next episode (even if unreleased)
+                    // This allows users to see upcoming episodes in their continue watching
+                    continueWatchingEpisodes[showId] = WatchHistoryData(
+                      traktId: 'synthetic:$tmdbId:$currentSeason:$nextEpisodeNum',
+                      type: 'episode',
+                      title: nextEpisodeData.name,
+                      tmdbId: tmdbId.toString(),
+                      seasonNumber: currentSeason,
+                      episodeNumber: nextEpisodeNum,
+                      progress: 0.0,
+                      watchedAt: latestWatched.watchedAt, // Keep same timestamp for sorting
+                      lastSyncedAt: DateTime.now(),
+                      createdAt: DateTime.now(),
+                      imdbId: null,
+                      pausedAt: null,
+                      runtime: null,
+                    );
+                  } else {
+                    // Check next season (S+1 E1)
+                    // We don't know for sure if next season exists without fetching show details or trying to fetch season
+                    // For now, we can try to fetch next season lightly? 
+                    // Or just leave it. Usually "Up Next" within a season is most critical.
+                    // NuvioStreaming checks next season too.
+                    final nextSeason = currentSeason + 1;
+                    final nextSeasonData = await ServiceLocator.instance.tmdbMetadataService.getTvSeason(tmdbId, nextSeason);
+                    
+                    if (nextSeasonData != null && nextSeasonData.episodes.isNotEmpty) {
+                      final firstEp = nextSeasonData.episodes.first;
+                      
+                      // Add next season's first episode (even if unreleased)
+                      continueWatchingEpisodes[showId] = WatchHistoryData(
+                        traktId: 'synthetic:$tmdbId:$nextSeason:${firstEp.episodeNumber}',
+                        type: 'episode',
+                        title: firstEp.name,
+                        tmdbId: tmdbId.toString(),
+                        seasonNumber: nextSeason,
+                        episodeNumber: firstEp.episodeNumber,
+                        progress: 0.0,
+                        watchedAt: latestWatched.watchedAt,
+                        lastSyncedAt: DateTime.now(),
+                        createdAt: DateTime.now(),
+                        imdbId: null,
+                        pausedAt: null,
+                        runtime: null,
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('Error checking for next episode: $e');
+          }
         }
       }
     }
     
     // Combine movies with filtered episodes (grouped by show) and episodes without TMDB ID
-    return [...movies, ...continueWatchingEpisodes.values, ...episodesWithoutTmdbId];
+    final allItems = [...movies, ...continueWatchingEpisodes.values, ...episodesWithoutTmdbId];
+
+    // Sort so "UP NEXT" items (progress == 0.0) appear first, then by watched time
+    allItems.sort((a, b) {
+      // "UP NEXT" items (progress == 0.0) get priority
+      if (a.progress == 0.0 && b.progress != 0.0) return -1;
+      if (a.progress != 0.0 && b.progress == 0.0) return 1;
+
+      // Within the same category, sort by watched time (most recent first)
+      return b.watchedAt.compareTo(a.watchedAt);
+    });
+
+    return allItems;
   }
 
   /// Convert watch history item to CatalogItem for display

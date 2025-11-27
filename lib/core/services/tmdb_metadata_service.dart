@@ -165,6 +165,46 @@ class TmdbMetadataService {
     }
   }
 
+  /// Fetch TV season metadata from TMDB (with caching)
+  Future<TmdbSeason?> getTvSeason(int tmdbId, int seasonNumber) async {
+    if (tmdbId <= 0) {
+      _logger.error('Invalid TMDB ID: $tmdbId');
+      return null;
+    }
+
+    final cacheKey = 'tv_${tmdbId}_season_$seasonNumber';
+
+    // Check cache first
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      _logger.debug('Using cached TV season metadata for TMDB ID: $tmdbId Season: $seasonNumber');
+      return TmdbSeason.fromJson(cached.data);
+    }
+
+    try {
+      _logger.debug('Fetching TV season metadata for TMDB ID: $tmdbId Season: $seasonNumber');
+      final response = await _dio.get('/tv/$tmdbId/season/$seasonNumber');
+      final data = response.data as Map<String, dynamic>;
+
+      // Store in cache
+      _cache[cacheKey] = _CachedMetadata(data, _config.tmdbCacheTtl);
+
+      // Remove old cache entries if cache is getting too large
+      if (_cache.length > _config.maxCacheSize) {
+        _cleanupCache();
+      }
+
+      return TmdbSeason.fromJson(data);
+    } catch (e) {
+      // 404 means season doesn't exist, which is valid
+      if (e is DioException && e.response?.statusCode == 404) {
+        return null;
+      }
+      _logger.error('Error fetching TV season metadata for ID: $tmdbId Season: $seasonNumber', e);
+      return null;
+    }
+  }
+
   /// Clear the metadata cache
   void clearCache() {
     _cache.clear();

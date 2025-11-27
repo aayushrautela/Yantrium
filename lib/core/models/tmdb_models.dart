@@ -432,7 +432,77 @@ class TmdbFindResult {
   }
 }
 
+class TmdbEpisode {
+  final int id;
+  final String name;
+  final String overview;
+  final String? stillPath;
+  final double voteAverage;
+  final int voteCount;
+  final String? airDate;
+  final int episodeNumber;
+  final int seasonNumber;
 
+  const TmdbEpisode({
+    required this.id,
+    required this.name,
+    required this.overview,
+    this.stillPath,
+    required this.voteAverage,
+    required this.voteCount,
+    this.airDate,
+    required this.episodeNumber,
+    required this.seasonNumber,
+  });
 
+  factory TmdbEpisode.fromJson(Map<String, dynamic> json) {
+    return TmdbEpisode(
+      id: json['id'] as int? ?? 0,
+      name: json['name'] as String? ?? '',
+      overview: json['overview'] as String? ?? '',
+      stillPath: json['still_path'] as String?,
+      voteAverage: (json['vote_average'] as num?)?.toDouble() ?? 0.0,
+      voteCount: json['vote_count'] as int? ?? 0,
+      airDate: json['air_date'] as String?,
+      episodeNumber: json['episode_number'] as int? ?? 0,
+      seasonNumber: json['season_number'] as int? ?? 0,
+    );
+  }
+}
 
+class TmdbSeason {
+  final String? airDate;
+  final int? episodeCount;
+  final int id;
+  final String name;
+  final String? overview;
+  final String? posterPath;
+  final int seasonNumber;
+  final List<TmdbEpisode> episodes;
 
+  const TmdbSeason({
+    this.airDate,
+    this.episodeCount,
+    required this.id,
+    required this.name,
+    this.overview,
+    this.posterPath,
+    required this.seasonNumber,
+    required this.episodes,
+  });
+
+  factory TmdbSeason.fromJson(Map<String, dynamic> json) {
+    return TmdbSeason(
+      airDate: json['air_date'] as String?,
+      episodeCount: json['episode_count'] as int?,
+      id: json['id'] as int? ?? 0,
+      name: json['name'] as String? ?? '',
+      overview: json['overview'] as String?,
+      posterPath: json['poster_path'] as String?,
+      seasonNumber: json['season_number'] as int? ?? 0,
+      episodes: (json['episodes'] as List<dynamic>?)
+          ?.map((e) => TmdbEpisode.fromJson(e))
+          .toList() ?? [],
+    );
+  }
+}
