@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../database/app_database.dart';
 import '../models/trakt_models.dart';
 import 'configuration_service.dart';
@@ -24,7 +26,7 @@ class TraktCoreService {
   final ConfigurationService _config = ConfigurationService.instance;
 
   late final Dio _dio;
-  late final AppDatabase _database;
+  AppDatabase? _database;
 
   // Authentication state
   String? _accessToken;
@@ -100,13 +102,25 @@ class TraktCoreService {
 
   /// Set up database reference (called by service locator)
   void setDatabase(AppDatabase database) {
-    _database = database;
+    // Only set database if not already set (singleton pattern)
+    if (_database == null) {
+      _database = database;
+      _logger.debug('[TraktCoreService] Database initialized');
+    } else {
+      _logger.debug('[TraktCoreService] Database already initialized, skipping');
+    }
   }
 
   /// Load user-configured completion threshold from database
   Future<void> _loadCompletionThreshold() async {
+    if (_database == null) {
+      _logger.error('[TraktCoreService] Database not initialized, using default completion threshold');
+      _completionThreshold = _config.defaultTraktCompletionThreshold;
+      return;
+    }
+
     try {
-      final thresholdStr = await _database.getAppSetting('trakt_completion_threshold');
+      final thresholdStr = await _database!.getSettingValue('trakt_completion_threshold');
       if (thresholdStr != null) {
         final threshold = int.tryParse(thresholdStr);
         if (threshold != null && threshold >= 50 && threshold <= 100) {
@@ -128,7 +142,9 @@ class TraktCoreService {
   Future<void> setCompletionThreshold(int threshold) async {
     if (threshold >= 50 && threshold <= 100) {
       _completionThreshold = threshold;
-      await _database.setAppSetting('trakt_completion_threshold', threshold.toString());
+      if (_database != null) {
+        await _database!.setSetting('trakt_completion_threshold', threshold.toString());
+      }
       _logger.info('[TraktCoreService] Updated completion threshold to: ${_completionThreshold}%');
     }
   }
@@ -177,9 +193,13 @@ class TraktCoreService {
   /// Initialize authentication state
   Future<void> initializeAuth() async {
     if (_isInitialized) return;
+    if (_database == null) {
+      _logger.error('[TraktCoreService] Cannot initialize auth: database not set');
+      return;
+    }
 
     try {
-      final auth = await _database.getTraktAuth();
+      final auth = await _database!.getTraktAuth();
       if (auth != null) {
         _accessToken = auth.accessToken;
         _refreshToken = auth.refreshToken;
@@ -269,13 +289,20 @@ class TraktCoreService {
     _refreshToken = refreshToken;
     _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn)).millisecondsSinceEpoch;
 
-    await _database.upsertTraktAuth(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      expiresIn: expiresIn,
-    );
-
-    _logger.debug('[TraktCoreService] Tokens saved successfully');
+    if (_database != null) {
+      await _database!.upsertTraktAuth(
+        TraktAuthCompanion.insert(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          expiresIn: expiresIn,
+          createdAt: DateTime.now(),
+          expiresAt: DateTime.now().add(Duration(seconds: expiresIn)),
+        ),
+      );
+      _logger.debug('[TraktCoreService] Tokens saved successfully');
+    } else {
+      _logger.error('[TraktCoreService] Cannot save tokens: database not initialized');
+    }
   }
 
   /// Log out user by clearing tokens
@@ -288,11 +315,13 @@ class TraktCoreService {
     _refreshToken = null;
     _tokenExpiry = 0;
 
-    try {
-      await _database.deleteTraktAuth();
-      _logger.info('[TraktCoreService] User logged out successfully');
-    } catch (error) {
-      _logger.error('[TraktCoreService] Error during logout', error);
+    if (_database != null) {
+      try {
+        await _database!.deleteTraktAuth();
+        _logger.info('[TraktCoreService] User logged out successfully');
+      } catch (error) {
+        _logger.error('[TraktCoreService] Error during logout', error);
+      }
     }
   }
 
@@ -353,7 +382,7 @@ class TraktCoreService {
         return responseData as T;
       } catch (parseError) {
         // If body is empty, return null instead of throwing
-        _logger.warn('[TraktCoreService] Empty JSON body for $endpoint, returning null');
+        _logger.warning('[TraktCoreService] Empty JSON body for $endpoint, returning null');
         return null as T;
       }
     } on DioException catch (error) {
@@ -366,7 +395,7 @@ class TraktCoreService {
               ? int.parse(retryAfter) * 1000
               : math.min(1000 * math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
 
-          _logger.log('[TraktCoreService] Rate limited (429), retrying in ${delay}ms (attempt ${retryCount + 1}/$maxRetries)');
+          _logger.warning('[TraktCoreService] Rate limited (429), retrying in ${delay}ms (attempt ${retryCount + 1}/$maxRetries)');
 
           await Future.delayed(Duration(milliseconds: delay.toInt()));
           return apiRequest<T>(endpoint, method: method, data: data, retryCount: retryCount + 1);
@@ -379,7 +408,7 @@ class TraktCoreService {
       // Handle 409 conflicts gracefully (already watched/scrobbled)
       if (error.response?.statusCode == 409) {
         final errorText = error.response?.data?.toString() ?? '';
-        _logger.log('[TraktCoreService] Content already scrobbled (409) for $endpoint: $errorText');
+        _logger.warning('[TraktCoreService] Content already scrobbled (409) for $endpoint: $errorText');
 
         // Parse the error response to get expiry info
         try {
@@ -388,7 +417,7 @@ class TraktCoreService {
               : error.response?.data;
 
           if (errorData is Map && errorData['watched_at'] != null && errorData['expires_at'] != null) {
-            _logger.log('[TraktCoreService] Item was already watched at ${errorData['watched_at']}, expires at ${errorData['expires_at']}');
+            _logger.info('[TraktCoreService] Item was already watched at ${errorData['watched_at']}, expires at ${errorData['expires_at']}');
 
             // If this is a scrobble endpoint, mark the item as already scrobbled
             if (endpoint.contains('/scrobble/') && data != null) {
@@ -396,7 +425,7 @@ class TraktCoreService {
               if (contentKey != null) {
                 _scrobbledItems.add(contentKey);
                 _scrobbledTimestamps[contentKey] = DateTime.now().millisecondsSinceEpoch;
-                _logger.log('[TraktCoreService] Marked content as already scrobbled: $contentKey');
+                _logger.info('[TraktCoreService] Marked content as already scrobbled: $contentKey');
               }
             }
 
@@ -409,7 +438,7 @@ class TraktCoreService {
             } as T;
           }
         } catch (parseError) {
-          _logger.warn('[TraktCoreService] Could not parse 409 error response: $parseError');
+          _logger.warning('[TraktCoreService] Could not parse 409 error response: $parseError');
         }
 
         // Return a graceful response even if we can't parse the error
@@ -423,8 +452,8 @@ class TraktCoreService {
 
       // Handle 404 errors more gracefully
       if (error.response?.statusCode == 404) {
-        _logger.warn('[TraktCoreService] Content not found in Trakt database (404) for $endpoint');
-        _logger.warn('[TraktCoreService] This might indicate invalid IMDb ID or content not in Trakt database');
+        _logger.warning('[TraktCoreService] Content not found in Trakt database (404) for $endpoint');
+        _logger.warning('[TraktCoreService] This might indicate invalid IMDb ID or content not in Trakt database');
 
         // Return a graceful response for 404s instead of throwing
         return {
@@ -459,7 +488,7 @@ class TraktCoreService {
         return 'episode:${payload['show']['ids']['imdb']}:S$season E$episode';
       }
     } catch (error) {
-      _logger.warn('[TraktCoreService] Could not extract content key from payload: $error');
+      _logger.warning('[TraktCoreService] Could not extract content key from payload: $error');
     }
     return null;
   }
@@ -599,7 +628,7 @@ class TraktCoreService {
       // Clean IMDb ID - remove 'tt' prefix if present
       final cleanImdbId = imdbId.startsWith('tt') ? imdbId.substring(2) : imdbId;
 
-      _logger.log('[TraktCoreService] Searching Trakt for $type with IMDb ID: $cleanImdbId');
+      _logger.info('[TraktCoreService] Searching Trakt for $type with IMDb ID: $cleanImdbId');
 
       // Try multiple search approaches
       final searchUrls = [
@@ -611,25 +640,25 @@ class TraktCoreService {
 
       for (final searchUrl in searchUrls) {
         try {
-          _logger.log('[TraktCoreService] Trying search URL: $searchUrl');
+          _logger.info('[TraktCoreService] Trying search URL: $searchUrl');
 
           final data = await apiRequest<List<dynamic>>(searchUrl);
-          _logger.log('[TraktCoreService] Search response data: $data');
+          _logger.debug('[TraktCoreService] Search response data: $data');
 
           if (data.isNotEmpty) {
             final traktId = data[0][type]?['ids']?['trakt'];
             if (traktId != null) {
-              _logger.log('[TraktCoreService] Found Trakt ID: $traktId for IMDb ID: $cleanImdbId');
+              _logger.info('[TraktCoreService] Found Trakt ID: $traktId for IMDb ID: $cleanImdbId');
               return traktId as int;
             }
           }
         } catch (urlError) {
-          _logger.warn('[TraktCoreService] URL attempt failed: $urlError');
+          _logger.warning('[TraktCoreService] URL attempt failed: $urlError');
           continue;
         }
       }
 
-      _logger.warn('[TraktCoreService] No results found for IMDb ID: $cleanImdbId after trying all search methods');
+      _logger.warning('[TraktCoreService] No results found for IMDb ID: $cleanImdbId after trying all search methods');
       return null;
     } catch (error) {
       _logger.error('[TraktCoreService] Failed to get Trakt ID from IMDb ID', error);
@@ -640,20 +669,20 @@ class TraktCoreService {
   /// Get Trakt ID from TMDB ID (fallback method)
   Future<int?> getTraktIdFromTmdbId(int tmdbId, String type) async {
     try {
-      _logger.log('[TraktCoreService] Searching Trakt for $type with TMDB ID: $tmdbId');
+      _logger.info('[TraktCoreService] Searching Trakt for $type with TMDB ID: $tmdbId');
 
       final data = await apiRequest<List<dynamic>>('/search/$type?id_type=tmdb&id=$tmdbId');
-      _logger.log('[TraktCoreService] TMDB search response: $data');
+      _logger.debug('[TraktCoreService] TMDB search response: $data');
 
       if (data.isNotEmpty) {
         final traktId = data[0][type]?['ids']?['trakt'];
         if (traktId != null) {
-          _logger.log('[TraktCoreService] Found Trakt ID via TMDB: $traktId for TMDB ID: $tmdbId');
+          _logger.info('[TraktCoreService] Found Trakt ID via TMDB: $traktId for TMDB ID: $tmdbId');
           return traktId as int;
         }
       }
 
-      _logger.warn('[TraktCoreService] No TMDB results found for TMDB ID: $tmdbId');
+      _logger.warning('[TraktCoreService] No TMDB results found for TMDB ID: $tmdbId');
       return null;
     } catch (error) {
       _logger.error('[TraktCoreService] Failed to get Trakt ID from TMDB ID', error);

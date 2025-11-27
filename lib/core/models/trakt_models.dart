@@ -475,6 +475,43 @@ class TraktRatingItemWithImages {
   }
 }
 
+/// Trakt watched item (for watched history)
+class TraktWatchedItem {
+  final TraktMovie? movie;
+  final TraktShow? show;
+  final int plays;
+  final DateTime lastWatchedAt;
+  final List<Map<String, dynamic>>? seasons;
+
+  const TraktWatchedItem({
+    this.movie,
+    this.show,
+    required this.plays,
+    required this.lastWatchedAt,
+    this.seasons,
+  });
+
+  factory TraktWatchedItem.fromJson(Map<String, dynamic> json) {
+    return TraktWatchedItem(
+      movie: json['movie'] != null ? TraktMovie.fromJson(json['movie']) : null,
+      show: json['show'] != null ? TraktShow.fromJson(json['show']) : null,
+      plays: json['plays'] as int? ?? 0,
+      lastWatchedAt: DateTime.parse(json['last_watched_at'] as String),
+      seasons: (json['seasons'] as List<dynamic>?)?.cast<Map<String, dynamic>>(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (movie != null) 'movie': movie!.toJson(),
+      if (show != null) 'show': show!.toJson(),
+      'plays': plays,
+      'last_watched_at': lastWatchedAt.toIso8601String(),
+      if (seasons != null) 'seasons': seasons,
+    };
+  }
+}
+
 /// Trakt images
 class TraktImages {
   final List<String>? fanart;

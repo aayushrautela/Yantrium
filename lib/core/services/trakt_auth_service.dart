@@ -109,7 +109,8 @@ class TraktAuthService {
 
   /// Refresh the access token using refresh token
   Future<bool> refreshToken() async {
-    return await _coreService.initializeAuth(); // This will handle token refresh
+    await _coreService.initializeAuth(); // This will handle token refresh
+    return await _coreService.isAuthenticated();
   }
 
   /// Get current authenticated user information

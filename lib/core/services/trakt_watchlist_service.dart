@@ -280,5 +280,53 @@ class TraktWatchlistService {
     }
   }
 
+  /// Get playback progress from Trakt (legacy method for compatibility)
+  Future<List<Map<String, dynamic>>> getPlaybackProgress({
+    String type = 'all',
+  }) async {
+    if (!['movies', 'episodes', 'all'].contains(type)) {
+      _logger.error('Type must be one of: movies, episodes, all');
+      return [];
+    }
+
+    try {
+      final items = await _coreService.getPlaybackProgressWithImages(type: type == 'all' ? null : type);
+      return items.map((item) => {
+        'progress': item.progress,
+        'paused_at': item.pausedAt.toIso8601String(),
+        'type': item.type,
+        if (item.movie != null) 'movie': item.movie!.toJson(),
+        if (item.episode != null) 'episode': item.episode!.toJson(),
+        if (item.show != null) 'show': item.show!.toJson(),
+      }).toList();
+    } catch (error) {
+      _logger.error('[TraktWatchlistService] Error fetching playback progress', error);
+      return [];
+    }
+  }
+
+  /// Get watched items from Trakt (legacy method for compatibility)
+  Future<List<Map<String, dynamic>>> getWatchedItems({
+    String type = 'all',
+  }) async {
+    if (!['movies', 'episodes', 'all'].contains(type)) {
+      _logger.error('Type must be one of: movies, episodes, all');
+      return [];
+    }
+
+    try {
+      final items = type == 'all'
+          ? await _coreService.getWatchedMovies() + await _coreService.getWatchedShows()
+          : type == 'movies'
+              ? await _coreService.getWatchedMovies()
+              : await _coreService.getWatchedShows();
+
+      return items.map((item) => item.toJson()).toList();
+    } catch (error) {
+      _logger.error('[TraktWatchlistService] Error fetching watched items', error);
+      return [];
+    }
+  }
+
 }
 

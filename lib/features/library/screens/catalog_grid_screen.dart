@@ -14,7 +14,6 @@ import '../../../core/services/tmdb_service.dart';
 import '../../../core/services/tmdb_data_extractor.dart';
 import '../../../core/services/id_parser.dart';
 import '../../../core/services/watch_history_service.dart';
-import '../../../core/services/trakt_service.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/smart_image.dart';
 import '../../../core/services/image_preloader.dart';

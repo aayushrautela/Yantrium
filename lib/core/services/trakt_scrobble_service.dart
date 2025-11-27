@@ -105,7 +105,7 @@ class TraktScrobbleService {
         final showImdbWithPrefix = contentData.showImdbId!.startsWith('tt')
             ? contentData.showImdbId
             : 'tt${contentData.showImdbId}';
-        payload['show']['ids']['imdb'] = showImdbWithPrefix;
+        (payload['show'] as Map<String, dynamic>)['ids'] = {'imdb': showImdbWithPrefix};
       }
 
       // Add episode IMDB ID if available (for specific episode IDs)
@@ -114,7 +114,7 @@ class TraktScrobbleService {
             ? contentData.imdbId
             : 'tt${contentData.imdbId}';
 
-        payload['episode']['ids'] = {
+        (payload['episode'] as Map<String, dynamic>)['ids'] = {
           'imdb': episodeImdbWithPrefix
         };
       }
@@ -183,7 +183,7 @@ class TraktScrobbleService {
     } catch (error) {
       // Handle rate limiting errors more gracefully
       if (error.toString().contains('429')) {
-        _logger.warn('[TraktScrobbleService] Rate limited, will retry later');
+        _logger.warning('[TraktScrobbleService] Rate limited, will retry later');
         return true; // Return success to avoid error spam
       }
 
@@ -192,7 +192,7 @@ class TraktScrobbleService {
     }
   }
 
-  /// Stop watching content (scrobble stop) - handles completion logic
+  /// Stop watching content (scrobble stop) - handles completion infoic
   Future<bool> scrobbleStop(TraktContentData contentData, double progress) async {
     try {
       // Validate content data before making API call
@@ -243,7 +243,7 @@ class TraktScrobbleService {
     } catch (error) {
       // Handle rate limiting errors more gracefully
       if (error.toString().contains('429')) {
-        _logger.warn('[TraktScrobbleService] Rate limited, will retry later');
+        _logger.warning('[TraktScrobbleService] Rate limited, will retry later');
         return true;
       }
 
@@ -439,7 +439,7 @@ class TraktScrobbleService {
   /// Remove items from user's watched history
   Future<TraktHistoryRemoveResponse?> removeFromHistory(TraktHistoryRemovePayload payload) async {
     try {
-      _logger.log('[TraktScrobbleService] removeFromHistory called with payload: ${payload.toJson()}');
+      _logger.info('[TraktScrobbleService] removeFromHistory called with payload: ${payload.toJson()}');
 
       final result = await _coreService.apiRequest<Map<String, dynamic>>(
         '/sync/history/remove',
@@ -448,7 +448,7 @@ class TraktScrobbleService {
       );
 
       final response = TraktHistoryRemoveResponse.fromJson(result);
-      _logger.log('[TraktScrobbleService] removeFromHistory API response: ${response.toJson()}');
+      _logger.info('[TraktScrobbleService] removeFromHistory API response: ${response.toJson()}');
 
       return response;
     } catch (error) {
@@ -501,7 +501,7 @@ class TraktScrobbleService {
       );
 
       final result = await removeFromHistory(payload);
-      return result != null && result.deleted.movies > 0;
+      return result != null && (result.deleted['movies'] ?? 0) > 0;
     } catch (error) {
       _logger.error('[TraktScrobbleService] Failed to remove movie from history', error);
       return false;
@@ -511,7 +511,7 @@ class TraktScrobbleService {
   /// Remove an episode from watched history by IMDB IDs
   Future<bool> removeEpisodeFromHistory(String showImdbId, int season, int episode) async {
     try {
-      _logger.log('[TraktScrobbleService] removeEpisodeFromHistory called for $showImdbId S${season}E${episode}');
+      _logger.info('[TraktScrobbleService] removeEpisodeFromHistory called for $showImdbId S${season}E${episode}');
 
       final payload = TraktHistoryRemovePayload(
         shows: [
@@ -531,17 +531,17 @@ class TraktScrobbleService {
         ],
       );
 
-      _logger.log('[TraktScrobbleService] Sending removeEpisodeFromHistory payload: ${payload.toJson()}');
+      _logger.info('[TraktScrobbleService] Sending removeEpisodeFromHistory payload: ${payload.toJson()}');
 
       final result = await removeFromHistory(payload);
 
       if (result != null) {
-        final success = result.deleted.episodes > 0;
-        _logger.log('[TraktScrobbleService] Episode removal success: $success (${result.deleted.episodes} episodes deleted)');
+        final success = (result.deleted['episodes'] ?? 0) > 0;
+        _logger.info('[TraktScrobbleService] Episode removal success: $success (${result.deleted['episodes'] ?? 0} episodes deleted)');
         return success;
       }
 
-      _logger.log('[TraktScrobbleService] No result from removeEpisodeFromHistory');
+      _logger.info('[TraktScrobbleService] No result from removeEpisodeFromHistory');
       return false;
     } catch (error) {
       _logger.error('[TraktScrobbleService] Failed to remove episode from history', error);
@@ -552,18 +552,18 @@ class TraktScrobbleService {
   /// Remove entire show from watched history by IMDB ID
   Future<bool> removeShowFromHistory(String imdbId) async {
     try {
-      _logger.log('[TraktScrobbleService] removeShowFromHistory called for $imdbId');
+      _logger.info('[TraktScrobbleService] removeShowFromHistory called for $imdbId');
 
       // First, let's check if this show exists in history
-      _logger.log('[TraktScrobbleService] Checking if $imdbId exists in watch history...');
+      _logger.info('[TraktScrobbleService] Checking if $imdbId exists in watch history...');
       final history = await getHistoryEpisodes(limit: 200); // Get recent episode history
       final fullImdbId = imdbId.startsWith('tt') ? imdbId : 'tt$imdbId';
       final showInHistory = history.any((item) => item.show?.ids?.imdb == fullImdbId);
 
-      _logger.log('[TraktScrobbleService] Show $imdbId found in history: $showInHistory');
+      _logger.info('[TraktScrobbleService] Show $imdbId found in history: $showInHistory');
 
       if (!showInHistory) {
-        _logger.log('[TraktScrobbleService] Show $imdbId not found in watch history - nothing to remove');
+        _logger.info('[TraktScrobbleService] Show $imdbId not found in watch history - nothing to remove');
         return true; // Consider this a success since there's nothing to remove
       }
 
@@ -577,19 +577,19 @@ class TraktScrobbleService {
         ],
       );
 
-      _logger.log('[TraktScrobbleService] Sending removeFromHistory payload: ${payload.toJson()}');
+      _logger.info('[TraktScrobbleService] Sending removeFromHistory payload: ${payload.toJson()}');
 
       final result = await removeFromHistory(payload);
 
-      _logger.log('[TraktScrobbleService] removeFromHistory response: ${result?.toJson()}');
+      _logger.info('[TraktScrobbleService] removeFromHistory response: ${result?.toJson()}');
 
       if (result != null) {
-        final success = result.deleted.episodes > 0;
-        _logger.log('[TraktScrobbleService] Show removal success: $success (${result.deleted.episodes} episodes deleted)');
+        final success = (result.deleted['episodes'] ?? 0) > 0;
+        _logger.info('[TraktScrobbleService] Show removal success: $success (${result.deleted['episodes'] ?? 0} episodes deleted)');
         return success;
       }
 
-      _logger.log('[TraktScrobbleService] No response from removeFromHistory API');
+      _logger.info('[TraktScrobbleService] No response from removeFromHistory API');
       return false;
     } catch (error) {
       _logger.error('[TraktScrobbleService] Failed to remove show from history', error);
@@ -603,7 +603,7 @@ class TraktScrobbleService {
       final payload = TraktHistoryRemovePayload(ids: historyIds);
 
       final result = await removeFromHistory(payload);
-      return result != null && (result.deleted.movies > 0 || result.deleted.episodes > 0);
+      return result != null && ((result.deleted['movies'] ?? 0) > 0 || (result.deleted['episodes'] ?? 0) > 0);
     } catch (error) {
       _logger.error('[TraktScrobbleService] Failed to remove history by IDs', error);
       return false;

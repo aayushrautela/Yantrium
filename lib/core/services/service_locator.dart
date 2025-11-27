@@ -69,8 +69,10 @@ class ServiceLocator {
 
   /// Get Trakt core service
   TraktCoreService get traktCoreService {
-    _traktCoreService ??= TraktCoreService.instance;
-    _traktCoreService!.setDatabase(database);
+    if (_traktCoreService == null) {
+      _traktCoreService = TraktCoreService.instance;
+      _traktCoreService!.setDatabase(database);
+    }
     return _traktCoreService!;
   }
 
