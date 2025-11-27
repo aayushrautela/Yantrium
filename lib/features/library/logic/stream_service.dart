@@ -14,133 +14,9 @@ class StreamService {
   final AddonRepository _addonRepository;
   final TmdbService _tmdbService;
 
-  StreamService(this._database)
+  StreamService(this._database) 
       : _addonRepository = AddonRepository(_database),
         _tmdbService = TmdbService();
-
-  /// Extract or generate stream URL from stream data
-  String? _getStreamUrl(Map<String, dynamic> streamData) {
-    // Direct URL (string)
-    if (streamData['url'] is String) {
-      return streamData['url'] as String;
-    }
-
-    // Nested URL object
-    if (streamData['url'] is Map && streamData['url']['url'] is String) {
-      return streamData['url']['url'] as String;
-    }
-
-    // Generate magnet URL from infoHash
-    if (streamData['infoHash'] is String) {
-      final infoHash = streamData['infoHash'] as String;
-      final trackers = [
-        'udp://tracker.opentrackr.org:1337/announce',
-        'udp://9.rarbg.com:2810/announce',
-        'udp://tracker.openbittorrent.com:6969/announce',
-        'udp://tracker.torrent.eu.org:451/announce',
-        'udp://open.stealth.si:80/announce',
-        'udp://tracker.leechers-paradise.org:6969/announce',
-        'udp://tracker.coppersurfer.tk:6969/announce',
-        'udp://tracker.internetwarriors.net:1337/announce',
-      ];
-      final trackersString = trackers.map((t) => '&tr=${Uri.encodeComponent(t)}').join('');
-      final title = streamData['title'] ?? streamData['name'] ?? 'Unknown';
-      return 'magnet:?xt=urn:btih:$infoHash&dn=${Uri.encodeComponent(title)}$trackersString';
-    }
-
-    return null;
-  }
-
-  /// Check if URL is a direct streaming URL (HTTP/HTTPS)
-  bool _isDirectStreamingUrl(String url) {
-    return url.startsWith('http://') || url.startsWith('https://');
-  }
-
-  /// Extract quality from stream name/title using regex patterns
-  String? _extractQuality(Map<String, dynamic> streamData) {
-    final text = streamData['name'] as String? ?? streamData['title'] as String?;
-    if (text == null) return null;
-
-    // Quality patterns to look for
-    final qualityPatterns = [
-      RegExp(r'\b4K\b', caseSensitive: false),
-      RegExp(r'\b2160p\b', caseSensitive: false),
-      RegExp(r'\b1440p\b', caseSensitive: false),
-      RegExp(r'\b1080p\b', caseSensitive: false),
-      RegExp(r'\b720p\b', caseSensitive: false),
-      RegExp(r'\b480p\b', caseSensitive: false),
-      RegExp(r'\b360p\b', caseSensitive: false),
-    ];
-
-    for (final pattern in qualityPatterns) {
-      final match = pattern.firstMatch(text);
-      if (match != null) {
-        return match.group(0);
-      }
-    }
-
-    return null;
-  }
-
-  /// Extract subtitle data from stream object
-  List<Subtitle>? _extractSubtitles(Map<String, dynamic> streamData) {
-    final subsData = streamData['subtitles'];
-    if (subsData is! List) return null;
-
-    return subsData.map((sub) {
-      if (sub is Map<String, dynamic>) {
-        return Subtitle(
-          url: sub['url'] as String,
-          lang: sub['lang'] as String,
-          id: sub['id'] as String?,
-        );
-      }
-      return null;
-    }).whereType<Subtitle>().toList();
-  }
-
-  /// Process streams robustly - filter and convert to StreamInfo objects
-  List<StreamInfo> _processStreams(List<dynamic> streamsData, AddonConfig addon) {
-    return streamsData
-      .where((stream) {
-        if (stream is! Map<String, dynamic>) return false;
-        final hasPlayableLink = stream['url'] != null || stream['infoHash'] != null;
-        final hasIdentifier = stream['title'] != null || stream['name'] != null;
-        return hasPlayableLink && hasIdentifier;
-      })
-      .map((streamData) {
-        final streamUrl = _getStreamUrl(streamData);
-        if (streamUrl == null) return null;
-
-        // Extract quality from name/title
-        final quality = _extractQuality(streamData);
-
-        // Build behavior hints
-        final behaviorHints = <String, dynamic>{};
-        if (streamData['behaviorHints'] is Map) {
-          behaviorHints.addAll(streamData['behaviorHints'] as Map<String, dynamic>);
-        }
-        if (streamData['fileIdx'] != null) {
-          behaviorHints['fileIdx'] = streamData['fileIdx'];
-        }
-
-        return StreamInfo(
-          id: streamData['id'] as String?,
-          title: streamData['title'] as String? ?? streamData['name'] as String?,
-          name: streamData['name'] as String? ?? streamData['title'] as String?,
-          description: streamData['description'] as String?,
-          url: streamUrl,
-          quality: quality,
-          type: streamData['type'] as String?,
-          subtitles: _extractSubtitles(streamData),
-          behaviorHints: behaviorHints.isNotEmpty ? behaviorHints : null,
-          addonId: addon.id,
-          addonName: addon.name,
-        );
-      })
-      .whereType<StreamInfo>()
-      .toList();
-  }
 
   /// Get IMDB ID from catalog item (fetches from TMDB if needed)
   Future<String?> _getImdbId(CatalogItem item, {Map<String, dynamic>? cachedTmdbData}) async {
@@ -312,7 +188,47 @@ class StreamService {
         }
       }
 
-      final parsedStreams = _processStreams(streamsData, addon);
+      final parsedStreams = streamsData
+          .map((streamData) {
+            try {
+              if (streamData is! Map<String, dynamic>) {
+                if (kDebugMode) {
+                  debugPrint('StreamService: Skipping invalid stream data (not a map)');
+                }
+                return null;
+              }
+
+              // Parse stream info and add addon metadata
+              final streamInfo = StreamInfo.fromJson(streamData);
+              
+              if (kDebugMode) {
+                debugPrint('StreamService: Parsed stream: url=${streamInfo.url}, quality=${streamInfo.quality}');
+              }
+              
+              // Add addon information to the stream
+              return StreamInfo(
+                id: streamInfo.id,
+                title: streamInfo.title,
+                name: streamInfo.name,
+                description: streamInfo.description,
+                url: streamInfo.url,
+                quality: streamInfo.quality,
+                type: streamInfo.type,
+                subtitles: streamInfo.subtitles,
+                behaviorHints: streamInfo.behaviorHints,
+                addonId: addon.id,
+                addonName: addon.name,
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                debugPrint('StreamService: Failed to parse stream: $e');
+                debugPrint('StreamService: Stream data: $streamData');
+              }
+              return null;
+            }
+          })
+          .whereType<StreamInfo>()
+          .toList();
       
       if (kDebugMode) {
         debugPrint('StreamService: Successfully parsed ${parsedStreams.length} stream(s) from addon ${addon.name}');
