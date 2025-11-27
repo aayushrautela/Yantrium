@@ -2776,21 +2776,21 @@ class _StreamSelectionDialog extends StatelessWidget {
 
     // Fall back to reconstructing from individual fields for simple titles
     final parts = <String>[];
-
+    
     if (stream.name != null && stream.name!.isNotEmpty) {
       parts.add(stream.name!);
     } else if (stream.title != null && stream.title!.isNotEmpty) {
       parts.add(stream.title!);
     }
-
+    
     if (stream.quality != null && stream.quality!.isNotEmpty) {
       parts.add(stream.quality!);
     }
-
+    
     if (stream.addonName != null && stream.addonName!.isNotEmpty) {
       parts.add('(${stream.addonName})');
     }
-
+    
     return parts.isNotEmpty ? parts.join(' • ') : 'Stream';
   }
 
