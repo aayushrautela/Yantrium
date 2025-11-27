@@ -12,6 +12,11 @@ class StreamInfo {
   final Map<String, dynamic>? behaviorHints;
   final String? addonId;
   final String? addonName;
+  final String? infoHash; // For magnet link construction
+  final int? fileIdx; // File index for torrent streams
+  final int? size; // Stream size in bytes
+  final bool? isFree; // Whether stream is free
+  final bool? isDebrid; // Whether stream is from debrid service
 
   StreamInfo({
     this.id,
@@ -25,6 +30,11 @@ class StreamInfo {
     this.behaviorHints,
     this.addonId,
     this.addonName,
+    this.infoHash,
+    this.fileIdx,
+    this.size,
+    this.isFree,
+    this.isDebrid,
   });
 
   factory StreamInfo.fromJson(Map<String, dynamic> json) {
@@ -44,6 +54,11 @@ class StreamInfo {
       behaviorHints: json['behaviorHints'] as Map<String, dynamic>?,
       addonId: json['addonId'] as String?,
       addonName: json['addonName'] as String?,
+      infoHash: json['infoHash'] as String?,
+      fileIdx: json['fileIdx'] as int?,
+      size: json['size'] as int?,
+      isFree: json['isFree'] as bool?,
+      isDebrid: json['isDebrid'] as bool?,
     );
   }
 }

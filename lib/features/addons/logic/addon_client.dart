@@ -148,18 +148,36 @@ class AddonClient {
       }
       
       final data = response.data as Map<String, dynamic>;
-      
+
       if (kDebugMode) {
         debugPrint('AddonClient: Parsed data keys: ${data.keys.toList()}');
         debugPrint('AddonClient: Full parsed data: $data');
       }
-      
-      final streams = data['streams'] as List<dynamic>? ?? [];
-      
+
+      // Validate response structure before accessing streams key
+      if (!data.containsKey('streams')) {
+        if (kDebugMode) {
+          debugPrint('AddonClient: Response missing streams key');
+          debugPrint('AddonClient: Available keys: ${data.keys.toList()}');
+        }
+        return {'streams': <dynamic>[]};
+      }
+
+      final streamsData = data['streams'];
+      if (streamsData is! List) {
+        if (kDebugMode) {
+          debugPrint('AddonClient: streams is not a list, type: ${streamsData.runtimeType}');
+          debugPrint('AddonClient: streams value: $streamsData');
+        }
+        return {'streams': <dynamic>[]};
+      }
+
+      final streams = streamsData;
+
       if (kDebugMode) {
         debugPrint('AddonClient: Extracted ${streams.length} stream(s) from response');
       }
-      
+
       return {'streams': streams};
     } on DioException catch (e) {
       if (kDebugMode) {

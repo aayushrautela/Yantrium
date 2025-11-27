@@ -18,6 +18,48 @@ class StreamService {
       : _addonRepository = AddonRepository(_database),
         _tmdbService = TmdbService();
 
+  /// Check if URL is a direct streaming URL (HTTP/HTTPS)
+  bool _isDirectStreamingUrl(String? url) {
+    if (url == null) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
+
+  /// Extract stream URL from various formats returned by addons
+  String _getStreamUrl(Map<String, dynamic> stream) {
+    // Prefer plain string URLs; guard against objects or unexpected types
+    if (stream['url'] is String) {
+      return stream['url'] as String;
+    }
+
+    // Some addons might nest the URL inside an object; try common shape
+    if (stream['url'] is Map<String, dynamic> &&
+        stream['url']['url'] is String) {
+      return stream['url']['url'] as String;
+    }
+
+    // Handle magnet links from infoHash
+    if (stream['infoHash'] is String) {
+      final infoHash = stream['infoHash'] as String;
+      final trackers = [
+        'udp://tracker.opentrackr.org:1337/announce',
+        'udp://9.rarbg.com:2810/announce',
+        'udp://tracker.openbittorrent.com:6969/announce',
+        'udp://tracker.torrent.eu.org:451/announce',
+        'udp://open.stealth.si:80/announce',
+        'udp://tracker.leechers-paradise.org:6969/announce',
+        'udp://tracker.coppersurfer.tk:6969/announce',
+        'udp://tracker.internetwarriors.net:1337/announce'
+      ];
+      final trackersString = trackers.map((t) => '&tr=${Uri.encodeComponent(t)}').join('');
+      final encodedTitle = Uri.encodeComponent(
+        stream['title'] ?? stream['name'] ?? 'Unknown'
+      );
+      return 'magnet:?xt=urn:btih:$infoHash&dn=$encodedTitle$trackersString';
+    }
+
+    return '';
+  }
+
   /// Get IMDB ID from catalog item (fetches from TMDB if needed)
   Future<String?> _getImdbId(CatalogItem item, {Map<String, dynamic>? cachedTmdbData}) async {
     // If already an IMDB ID, use it directly
@@ -166,7 +208,7 @@ class StreamService {
     final streamId = episodeId ?? imdbId ?? item.id;
     
     if (kDebugMode) {
-      debugPrint('StreamService: Requesting /stream/${item.type}/${streamId}.json from ${addon.baseUrl}');
+      debugPrint('StreamService: Requesting /stream/${item.type}/$streamId.json from ${addon.baseUrl}');
       debugPrint('StreamService: Using stream ID: $streamId (episodeId: $episodeId, imdbId: $imdbId, item.id: ${item.id})');
     }
     
@@ -179,7 +221,7 @@ class StreamService {
         debugPrint('StreamService: Full response: $response');
       }
       
-      final streamsData = response['streams'] as List<dynamic>? ?? [];
+      final streamsData = response['streams'] ?? [];
 
       if (kDebugMode) {
         debugPrint('StreamService: Received ${streamsData.length} raw stream(s) from addon ${addon.name}');
@@ -188,40 +230,88 @@ class StreamService {
         }
       }
 
+      // Process streams using NuvioStreaming approach with pre-filtering and individual error handling
       final parsedStreams = streamsData
+          .where((stream) {
+            // Pre-filter streams - ensure there's a way to play (URL or infoHash) and identify (title/name)
+            if (stream is! Map<String, dynamic>) return false;
+
+            final hasPlayableLink = (stream['url'] != null || stream['infoHash'] != null);
+            final hasIdentifier = (stream['title'] != null || stream['name'] != null);
+
+            if (!hasPlayableLink) {
+              if (kDebugMode) {
+                debugPrint('StreamService: Skipping stream without playable link');
+              }
+            }
+            if (!hasIdentifier) {
+              if (kDebugMode) {
+                debugPrint('StreamService: Skipping stream without identifier');
+              }
+            }
+
+            return hasPlayableLink && hasIdentifier;
+          })
           .map((streamData) {
             try {
-              if (streamData is! Map<String, dynamic>) {
-                if (kDebugMode) {
-                  debugPrint('StreamService: Skipping invalid stream data (not a map)');
-                }
-                return null;
+              final stream = streamData as Map<String, dynamic>;
+              final streamUrl = _getStreamUrl(stream);
+              final isDirectStreamingUrl = _isDirectStreamingUrl(streamUrl);
+              final isMagnetStream = streamUrl.startsWith('magnet:');
+
+              // Handle display title logic (prefer description if longer and contains newlines)
+              String displayTitle = stream['title'] ?? stream['name'] ?? 'Unnamed Stream';
+              final description = stream['description'] as String?;
+              final title = stream['title'] as String?;
+              if (description != null &&
+                  description.contains('\n') &&
+                  description.length > (title?.length ?? 0)) {
+                displayTitle = description;
               }
 
-              // Parse stream info and add addon metadata
-              final streamInfo = StreamInfo.fromJson(streamData);
-              
-              if (kDebugMode) {
-                debugPrint('StreamService: Parsed stream: url=${streamInfo.url}, quality=${streamInfo.quality}');
-              }
-              
-              // Add addon information to the stream
+              // Extract size: Prefer behaviorHints.videoSize, fallback to top-level size
+              final behaviorHints = stream['behaviorHints'] as Map<String, dynamic>?;
+              final sizeInBytes = (behaviorHints?['videoSize'] as int?) ?? (stream['size'] as int?);
+
+              // Memory optimization: Minimize behaviorHints to essential data only
+              final minimalBehaviorHints = <String, dynamic>{
+                'notWebReady': !isDirectStreamingUrl,
+                if (behaviorHints?['cached'] != null) 'cached': behaviorHints!['cached'],
+                if (behaviorHints?['bingeGroup'] != null) 'bingeGroup': behaviorHints!['bingeGroup'],
+                // Only include essential torrent data for magnet streams
+                if (isMagnetStream) ...{
+                  'infoHash': stream['infoHash'] ?? (streamUrl.contains('btih:') ? streamUrl.split('btih:')[1].split('&')[0] : null),
+                  'fileIdx': stream['fileIdx'],
+                  'type': 'torrent',
+                },
+              };
+
+              // Explicitly construct the final StreamInfo object with all fields
               return StreamInfo(
-                id: streamInfo.id,
-                title: streamInfo.title,
-                name: streamInfo.name,
-                description: streamInfo.description,
-                url: streamInfo.url,
-                quality: streamInfo.quality,
-                type: streamInfo.type,
-                subtitles: streamInfo.subtitles,
-                behaviorHints: streamInfo.behaviorHints,
+                id: stream['id'] as String?,
+                title: displayTitle,
+                name: stream['name'] as String? ?? stream['title'] as String? ?? 'Unnamed Stream',
+                description: stream['description'] as String?,
+                url: streamUrl,
+                quality: stream['quality'] as String?,
+                type: stream['type'] as String?,
+                subtitles: stream['subtitles'] != null
+                    ? (stream['subtitles'] as List<dynamic>)
+                        .map((s) => Subtitle.fromJson(s as Map<String, dynamic>))
+                        .toList()
+                    : null,
+                behaviorHints: minimalBehaviorHints,
                 addonId: addon.id,
                 addonName: addon.name,
+                infoHash: stream['infoHash'] as String?,
+                fileIdx: stream['fileIdx'] as int?,
+                size: sizeInBytes,
+                isFree: stream['isFree'] as bool?,
+                isDebrid: (behaviorHints?['cached'] as bool?) ?? false,
               );
             } catch (e) {
               if (kDebugMode) {
-                debugPrint('StreamService: Failed to parse stream: $e');
+                debugPrint('StreamService: Failed to process individual stream: $e');
                 debugPrint('StreamService: Stream data: $streamData');
               }
               return null;
