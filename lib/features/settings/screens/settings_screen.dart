@@ -592,7 +592,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         height: 16,
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
-                                    : const Text('Sync Watch History'),
+                                    : const Text('Resync Watch History'),
                               ),
                               const SizedBox(width: 8),
                               PrimaryButton(
@@ -1197,7 +1197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, overlay) => Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: const Text('You must be logged in to Trakt to sync watch history'),
+              child: const Text('You must be logged in to Trakt to resync watch history'),
             ),
           ),
         );
@@ -1211,6 +1211,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final watchHistoryService = ServiceLocator.instance.watchHistoryService;
+      final database = ServiceLocator.instance.database;
+
+      // Clear all existing watch history first
+      await database.clearWatchHistory();
+
+      // Then sync fresh data from Trakt
       final syncedCount = await watchHistoryService.syncWatchHistory(forceRefresh: true);
 
       if (mounted) {
@@ -1219,7 +1225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, overlay) => Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Successfully synced $syncedCount watch history items from Trakt'),
+              child: Text('Successfully resynced $syncedCount watch history items from Trakt'),
             ),
           ),
         );
@@ -1231,7 +1237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, overlay) => Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Failed to sync watch history: $e'),
+              child: Text('Failed to resync watch history: $e'),
             ),
           ),
         );
