@@ -101,11 +101,16 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
     }
 
     try {
-      // Try to sync watch history from Trakt if authenticated
+      // Try to sync watch history from Trakt if authenticated (incremental sync)
       // If not authenticated, we'll use local data as fallback
       final isTraktAuthenticated = await ServiceLocator.instance.traktAuthService.isAuthenticated();
       if (isTraktAuthenticated) {
-        await _watchHistoryService.syncWatchHistory();
+        // Perform incremental sync in background to avoid blocking UI
+        _watchHistoryService.syncWatchHistory().then((syncedCount) {
+          debugPrint('Background sync completed: $syncedCount items synced');
+        }).catchError((error) {
+          debugPrint('Background sync failed: $error');
+        });
       } else {
         debugPrint('Trakt not authenticated, using local continue watching data');
       }

@@ -2405,6 +2405,16 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     _checkWatchedStatus();
   }
 
+  @override
+  void didUpdateWidget(_EpisodeCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber ||
+        oldWidget.seasonNumber != widget.seasonNumber ||
+        oldWidget.seriesItem.id != widget.seriesItem.id) {
+      _checkWatchedStatus();
+    }
+  }
+
   Future<void> _checkWatchedStatus() async {
     if (kDebugMode) {
       debugPrint('_EpisodeCard: Checking watched status for episode');
