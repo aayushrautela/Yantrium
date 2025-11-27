@@ -46,15 +46,12 @@ class TorrentService {
       _isRunning = true;
 
       // Listen to output for debugging
-      // All logs now go to stdout, so we only need to listen to stdout
+      // All logs (including what used to be stderr) now go to stdout
       _sidecarProcess!.stdout.transform(utf8.decoder).listen((data) {
         debugPrint('TorrentSidecar: $data');
       });
 
-      // Listen to stderr for any remaining critical errors (should be rare now)
-      _sidecarProcess!.stderr.transform(utf8.decoder).listen((data) {
-        debugPrint('TorrentSidecar ERROR: $data');
-      });
+      // No need to listen to stderr since it's redirected to stdout
 
       // Monitor for crashes
       _sidecarProcess!.exitCode.then((exitCode) {
