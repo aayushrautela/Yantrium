@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 import '../../../core/services/torrent_service.dart';
+import '../../../core/services/service_locator.dart';
 
 /// Controller for video playback using FVP (FFmpeg-based)
 class FvpPlayerController {
@@ -10,7 +11,7 @@ class FvpPlayerController {
   Timer? _positionUpdateTimer;
 
   FvpPlayerController({TorrentService? torrentService})
-      : _torrentService = torrentService ?? TorrentService();
+      : _torrentService = torrentService ?? ServiceLocator.instance.torrentService;
   
   bool _isPlaying = false;
   bool _isPaused = false;

@@ -10,6 +10,7 @@ import 'tmdb_search_service.dart';
 import 'tmdb_enrichment_service.dart';
 import 'watch_history_service.dart';
 import 'library_service.dart';
+import 'torrent_service.dart';
 
 /// Service Locator for dependency injection
 class ServiceLocator {
@@ -34,6 +35,7 @@ class ServiceLocator {
   TmdbEnrichmentService? _tmdbEnrichmentService;
   WatchHistoryService? _watchHistoryService;
   LibraryService? _libraryService;
+  TorrentService? _torrentService;
 
   /// Initialize the service locator with required dependencies
   Future<void> initialize(AppDatabase database) async {
@@ -124,6 +126,12 @@ class ServiceLocator {
     return _libraryService!;
   }
 
+  /// Get torrent service
+  TorrentService get torrentService {
+    _torrentService ??= TorrentService();
+    return _torrentService!;
+  }
+
   /// Dispose all services for graceful shutdown
   Future<void> dispose() async {
     if (!_isInitialized) return;
@@ -134,6 +142,12 @@ class ServiceLocator {
       if (_libraryService != null) {
         // Note: LibraryService doesn't have a dispose method yet
         _libraryService = null;
+      }
+
+      // Dispose torrent service
+      if (_torrentService != null) {
+        await _torrentService!.stop();
+        _torrentService = null;
       }
 
       // Dispose watch history service

@@ -103,10 +103,11 @@ static void my_application_startup(GApplication* application) {
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  // Give Flutter some time to cleanup (up to 5 seconds)
+  // Give Flutter some time to cleanup (up to 200ms)
+  // Reduced from 5 seconds to 200ms to make app closing feel instant
   // This allows the Dart side to perform asynchronous cleanup when the app lifecycle changes
   GDateTime* start_time = g_date_time_new_now_local();
-  while (g_date_time_difference(g_date_time_new_now_local(), start_time) < 5000000) { // 5 seconds in microseconds
+  while (g_date_time_difference(g_date_time_new_now_local(), start_time) < 200000) { // 0.2 seconds
     // Process any remaining events
     while (g_main_context_iteration(nullptr, FALSE)) {
       // Continue processing
