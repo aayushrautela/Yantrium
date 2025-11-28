@@ -17,6 +17,9 @@ import '../../../core/services/watch_history_service.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/smart_image.dart';
 import '../../../core/services/image_preloader.dart';
+import 'episode_detail_screen.dart';
+import '../models/episode.dart';
+import '../../../core/services/id_parser.dart';
 
 /// Screen displaying catalogs from all enabled addons in horizontal scrolling lists
 class CatalogGridScreen extends StatefulWidget {
@@ -2303,13 +2306,39 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
       onExit: (_) => setState(() => _isHovered = false),
       child: Clickable(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => CatalogItemDetailScreen(
-                item: widget.item,
+          // If this is a specific episode, navigate to episode detail screen
+          if (widget.item.type == 'series' && widget.seasonNumber != null && widget.episodeNumber != null) {
+            // Create a minimal Episode object
+            // The EpisodeDetailScreen will fetch the full data
+            final episode = Episode(
+              episodeNumber: widget.episodeNumber!,
+              name: widget.episodeName ?? 'Episode ${widget.episodeNumber}',
+              overview: null, // Will be fetched by screen
+              stillPath: null, // Will be fetched by screen
+              airDate: null, // Will be fetched by screen
+              runtime: null, // Will be fetched by screen
+              voteAverage: null, // Will be fetched by screen
+            );
+
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => EpisodeDetailScreen(
+                  seriesItem: widget.item,
+                  episode: episode,
+                  seasonNumber: widget.seasonNumber!,
+                ),
               ),
-            ),
-          );
+            );
+          } else {
+            // Navigate to series/movie detail screen
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => CatalogItemDetailScreen(
+                  item: widget.item,
+                ),
+              ),
+            );
+          }
         },
         child: SizedBox(
           width: 480, // Landscape 16:9 ratio

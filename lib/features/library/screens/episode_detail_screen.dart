@@ -39,10 +39,12 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   late ScrollController _seasonListScrollController;
   late ScrollController _mainScrollController;
   bool _showSeasonScrollArrow = false;
+  late Episode _currentEpisode;
 
   @override
   void initState() {
     super.initState();
+    _currentEpisode = widget.episode;
     final database = DatabaseProvider.instance;
     _streamService = StreamService(database);
     _seasonListScrollController = ScrollController();
@@ -50,6 +52,44 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     _mainScrollController = ScrollController();
     _selectedSeasonNumber = widget.seasonNumber;
     _loadSeasonsAndEpisodes();
+    
+    // If the current episode is missing details (like airDate), fetch them immediately
+    // This is faster than waiting for all seasons to load
+    if (_currentEpisode.airDate == null || _currentEpisode.stillPath == null || _currentEpisode.overview == null) {
+      _fetchCurrentEpisodeDetails();
+    }
+  }
+
+  Future<void> _fetchCurrentEpisodeDetails() async {
+    try {
+      final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
+      int? finalTmdbId = tmdbId;
+
+      if (finalTmdbId == null && IdParser.isImdbId(widget.seriesItem.id)) {
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.seriesItem.id);
+      }
+
+      if (finalTmdbId != null) {
+        // Fetch just the current season to get the episode details quickly
+        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, widget.seasonNumber);
+        
+        if (seasonData != null && seasonData['episodes'] != null && mounted) {
+          final episodes = seasonData['episodes'] as List<dynamic>;
+          final episodeData = episodes.firstWhere(
+            (e) => e['episode_number'] == widget.episode.episodeNumber,
+            orElse: () => null,
+          );
+
+          if (episodeData != null) {
+            setState(() {
+              _currentEpisode = Episode.fromJson(episodeData);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching current episode details: $e');
+    }
   }
 
   @override
@@ -143,6 +183,23 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         if (mounted) {
           setState(() {
             _seasons = seasons;
+            
+            // Find the current episode in the loaded data and update it
+            // This ensures we have full metadata (air date, runtime, etc.)
+            // even if we navigated with a minimal episode object
+            for (final season in seasons) {
+              if (season.seasonNumber == widget.seasonNumber) {
+                final foundEpisode = season.episodes.firstWhere(
+                  (e) => e.episodeNumber == widget.episode.episodeNumber,
+                  orElse: () => widget.episode,
+                );
+                if (foundEpisode != widget.episode) {
+                  _currentEpisode = foundEpisode;
+                }
+                break;
+              }
+            }
+
             // Ensure the current episode's season is selected
             if (_seasons.isNotEmpty) {
               // Check if the season exists in the loaded seasons
@@ -259,7 +316,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         final selectedStream = await showDialog<StreamInfo>(
           context: context,
           builder: (context) => _StreamSelectionDialog(
-            title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${widget.episode.episodeNumber}',
+            title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${_currentEpisode.episodeNumber}',
             streams: streams,
           ),
         );
@@ -277,13 +334,13 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
               material.MaterialPageRoute(
                 builder: (context) => VideoPlayerScreen(
                   streamUrl: selectedStream.url,
-                  title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${widget.episode.episodeNumber}',
+                  title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${_currentEpisode.episodeNumber}',
                   subtitles: selectedStream.subtitles?.map((s) => s.url).toList(),
                   logoUrl: widget.seriesItem.logo,
-                  description: widget.episode.overview ?? widget.seriesItem.description,
-                  episodeName: widget.episode.name,
+                  description: _currentEpisode.overview ?? widget.seriesItem.description,
+                  episodeName: _currentEpisode.name,
                   seasonNumber: widget.seasonNumber,
-                  episodeNumber: widget.episode.episodeNumber,
+                  episodeNumber: _currentEpisode.episodeNumber,
                   isMovie: false,
                 ),
               ),
@@ -724,8 +781,8 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   Widget build(BuildContext context) {
     // Get episode image URL, fallback to show backdrop
     String? backdropUrl;
-    if (widget.episode.stillPath != null) {
-      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'original');
+    if (_currentEpisode.stillPath != null) {
+      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(_currentEpisode.stillPath, size: 'original');
     } else if (widget.seriesItem.background != null) {
       backdropUrl = widget.seriesItem.background;
     }
@@ -864,7 +921,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'S${widget.seasonNumber.toString().padLeft(2, '0')}E${widget.episode.episodeNumber.toString().padLeft(2, '0')}',
+                                  'S${widget.seasonNumber.toString().padLeft(2, '0')}E${_currentEpisode.episodeNumber.toString().padLeft(2, '0')}',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w500,
@@ -873,7 +930,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  widget.episode.name,
+                                  _currentEpisode.name,
                                   style: const TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.w600,
@@ -887,11 +944,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                           const SizedBox(height: 20),
 
                           // Description
-                          if (widget.episode.overview != null)
+                          if (_currentEpisode.overview != null)
                             SizedBox(
                               width: 600,
                               child: Text(
-                                widget.episode.overview!,
+                                _currentEpisode.overview!,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   height: 1.5,
@@ -988,20 +1045,23 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   bool _isHovered = false;
   bool _isWatched = false;
   late final AppDatabase _database;
+  late Episode _currentEpisode;
 
   @override
   void initState() {
     super.initState();
     _database = DatabaseProvider.instance;
+    _currentEpisode = widget.episode;
     _checkWatchedStatus();
   }
 
   @override
   void didUpdateWidget(_EpisodeCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber ||
-        oldWidget.seasonNumber != widget.seasonNumber ||
-        oldWidget.seriesItem.id != widget.seriesItem.id) {
+    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber) {
+      _currentEpisode = widget.episode;
+      _checkWatchedStatus();
+    } else if (oldWidget.seriesItem.id != widget.seriesItem.id) {
       _checkWatchedStatus();
     }
   }
@@ -1138,11 +1198,11 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                               ),
                             ),
                           ),
-                        // Duration badge (top right)
-                        if (widget.episode.runtime != null)
+                        // Runtime overlay
+                        if (_currentEpisode.runtime != null)
                           Positioned(
-                            top: 8,
-                            right: 8,
+                            bottom: 8,
+                            right: _currentEpisode.airDate != null ? 100 : 8,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -1150,7 +1210,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                '${widget.episode.runtime} min',
+                                '${_currentEpisode.runtime} min',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
@@ -1159,45 +1219,66 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Episode info
-                Flexible(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${widget.episode.episodeNumber}. ${widget.episode.name}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (widget.episode.overview != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.episode.overview!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                        // Date overlay (bottom right)
+                        if (_currentEpisode.airDate != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: material.Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _currentEpisode.airDate!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
                 ),
+                  // Episode info
+                  Flexible(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${_currentEpisode.episodeNumber}. ${_currentEpisode.name}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (_currentEpisode.overview != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _currentEpisode.overview!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
