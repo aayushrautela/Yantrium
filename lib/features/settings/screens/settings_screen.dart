@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io' show Platform, Process;
 import 'package:flutter/material.dart' as material;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
-import 'package:flutter_web_auth/flutter_web_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../addons/models/addon_config.dart';
 import '../../addons/logic/addon_repository.dart';
@@ -13,7 +12,6 @@ import '../../addons/screens/addon_details_screen.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../library/logic/catalog_preferences_repository.dart';
 import '../../../core/services/service_locator.dart';
-import '../../../core/services/oauth_handler.dart';
 import '../../../core/services/theme_service.dart';
 
 /// Check if the app is running in a Flatpak environment
@@ -602,18 +600,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           )
                         else
-                          Row(
-                            children: [
-                              GhostButton(
-                                onPressed: _showManualLoginDialog,
-                                child: const Text('Manual Login'),
-                              ),
-                              const SizedBox(width: 8),
-                              PrimaryButton(
-                                onPressed: _loginTrakt,
-                                child: const Text('Login'),
-                              ),
-                            ],
+                          PrimaryButton(
+                            onPressed: _loginTrakt,
+                            child: const Text('Login'),
                           ),
                       ],
                     ),
@@ -879,123 +868,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _showManualLoginDialog() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Manual Login'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'If the automatic login failed, copy the authorization code or the full redirect URL from your browser and paste it here.',
-            ).muted(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              placeholder: const Text('Paste code or URL here'),
-            ),
-            const SizedBox(height: 8),
-            GhostButton(
-              onPressed: () async {
-                final authUrl = ServiceLocator.instance.traktAuthService.getAuthorizationUrl();
-                await _openUrlInBrowser(authUrl);
-              },
-              child: const Text('Open Login Page Again'),
-            ),
-          ],
-        ),
-        actions: [
-          SecondaryButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          PrimaryButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Login'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && result.isNotEmpty) {
-      // Parse code from URL if needed
-      String code = result.trim();
-      if (code.contains('code=')) {
-        final uri = Uri.parse(code);
-        code = uri.queryParameters['code'] ?? code;
-      } else if (code.startsWith('yantrium://')) {
-         // Handle case where it might be just the scheme part without query params parsing correctly if malformed
-         final uri = Uri.tryParse(code);
-         if (uri != null && uri.queryParameters.containsKey('code')) {
-           code = uri.queryParameters['code']!;
-         }
-      }
-
-      if (code.isNotEmpty) {
-        await _exchangeCode(code);
-      }
-    }
-  }
-
-  Future<void> _exchangeCode(String code) async {
-    // Show loading dialog
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    try {
-      final success = await ServiceLocator.instance.traktAuthService.exchangeCodeForToken(code);
-
-      if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
-
-        if (success) {
-          showToast(
-            context: context,
-            builder: (context, overlay) => Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: const Text('Successfully logged in to Trakt'),
-              ),
-            ),
-          );
-          await _checkTraktAuth();
-        } else {
-          showToast(
-            context: context,
-            builder: (context, overlay) => Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: const Text('Failed to authenticate with Trakt. Check the code and try again.'),
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
-        showToast(
-          context: context,
-          builder: (context, overlay) => Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('Error: $e'),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _loginTrakt() async {
     if (!ServiceLocator.instance.traktAuthService.isConfigured) {
@@ -1015,7 +887,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // Show loading dialog
+    // Show loading dialog while generating device code
     if (mounted) {
       showDialog(
         context: context,
@@ -1027,81 +899,258 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     try {
-      final authUrl = ServiceLocator.instance.traktAuthService.getAuthorizationUrl();
-      String? code;
-
-      // Use platform-specific OAuth flow
-      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-        // Desktop platforms: open in browser and listen for callback
-        // This works in Flatpak with proper portal permissions and URI scheme registration
-        code = await _handleDesktopOAuth(authUrl);
-      } else {
-        // Mobile platforms: use flutter_web_auth
-        try {
-          final result = await FlutterWebAuth.authenticate(
-            url: authUrl,
-            callbackUrlScheme: 'yantrium',
-          );
-          final uri = Uri.parse(result);
-          code = uri.queryParameters['code'];
-        } catch (e) {
-          // Fallback to desktop method if flutter_web_auth fails
-          code = await _handleDesktopOAuth(authUrl);
-        }
-      }
+      // Generate device code
+      final deviceCodeResponse = await ServiceLocator.instance.traktAuthService.generateDeviceCode();
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading dialog
       }
 
-      if (code != null) {
-        // Show loading dialog again for token exchange
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        final success = await ServiceLocator.instance.traktAuthService.exchangeCodeForToken(code);
-
-        if (mounted) {
-          Navigator.of(context).pop(); // Close loading dialog
-
-          if (success) {
-            showToast(
-              context: context,
-              builder: (context, overlay) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: const Text('Successfully logged in to Trakt'),
-                ),
-              ),
-            );
-            await _checkTraktAuth();
-          } else {
-            showToast(
-              context: context,
-              builder: (context, overlay) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: const Text('Failed to authenticate with Trakt'),
-                ),
-              ),
-            );
-          }
-        }
-      } else {
+      if (deviceCodeResponse == null) {
         if (mounted) {
           showToast(
             context: context,
             builder: (context, overlay) => Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: const Text('OAuth authentication was cancelled or failed'),
+                child: const Text('Failed to generate device code. Please try again.'),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show device code dialog
+      final shouldContinue = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Connect to Trakt'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'To connect your Trakt account, please visit the following URL and enter the code:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.muted,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Code:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      deviceCodeResponse.userCode,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Visit this URL:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                deviceCodeResponse.verificationUrl,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This code will expire in ${deviceCodeResponse.expiresIn} seconds.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            SecondaryButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            PrimaryButton(
+              onPressed: () {
+                // Open verification URL in browser
+                _openUrlInBrowser(deviceCodeResponse.verificationUrl);
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Open URL & Continue'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldContinue != true) {
+        return;
+      }
+
+      // Show polling dialog
+      bool pollingCancelled = false;
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Waiting for authorization'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text(
+                  'Please visit the URL and enter the code to authorize this app.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Code: ${deviceCodeResponse.userCode}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              SecondaryButton(
+                onPressed: () {
+                  pollingCancelled = true;
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      // Poll for access token
+      final startTime = DateTime.now();
+      final expiresAt = startTime.add(Duration(seconds: deviceCodeResponse.expiresIn));
+      bool success = false;
+
+      while (!pollingCancelled && DateTime.now().isBefore(expiresAt)) {
+        // Wait for the polling interval
+        await Future.delayed(Duration(seconds: deviceCodeResponse.interval));
+
+        if (pollingCancelled) break;
+
+        final result = await ServiceLocator.instance.traktAuthService.pollForAccessToken(
+          deviceCodeResponse.deviceCode,
+          deviceCodeResponse.interval,
+        );
+
+        if (result == true) {
+          // Success!
+          success = true;
+          break;
+        } else if (result == false) {
+          // Failed (expired, denied, etc.)
+          break;
+        }
+        // result == null means still pending, continue polling
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close polling dialog
+      }
+
+      if (success) {
+        // Update auth status immediately
+        await _checkTraktAuth();
+        
+        // Show blocking loading dialog for syncing history
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Syncing history...',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Sync watch history
+        try {
+          final watchHistoryService = ServiceLocator.instance.watchHistoryService;
+          final database = ServiceLocator.instance.database;
+
+          // Clear all existing watch history first
+          await database.clearWatchHistory();
+          
+          // Also clear the last sync timestamp to force a completely fresh sync from scratch
+          await database.deleteSetting('last_trakt_sync');
+
+          // Then sync fresh data from Trakt
+          final syncedCount = await watchHistoryService.syncWatchHistory(forceRefresh: true);
+
+          if (mounted) {
+            Navigator.of(context).pop(); // Close syncing dialog
+            
+            showToast(
+              context: context,
+              builder: (context, overlay) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Successfully logged in and synced $syncedCount watch history items from Trakt'),
+                ),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            Navigator.of(context).pop(); // Close syncing dialog
+            
+            showToast(
+              context: context,
+              builder: (context, overlay) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Logged in successfully, but failed to sync history: $e'),
+                ),
+              ),
+            );
+          }
+        }
+      } else if (!pollingCancelled) {
+        if (mounted) {
+          showToast(
+            context: context,
+            builder: (context, overlay) => Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: const Text(
+                  'Authentication failed or expired. Please try again.',
+                ),
               ),
             ),
           );
@@ -1109,7 +1158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.of(context).pop(); // Close any open dialogs
         showToast(
           context: context,
           builder: (context, overlay) => Card(
@@ -1123,32 +1172,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Handle OAuth flow on desktop platforms using browser + deep linking
-  Future<String?> _handleDesktopOAuth(String authUrl) async {
-    final oauthHandler = OAuthHandler();
-
-    try {
-      // Start OAuth flow using the global handler
-      final oauthFuture = oauthHandler.startOAuthFlow();
-
-      // Open the authorization URL in the default browser
-      await _openUrlInBrowser(authUrl);
-
-      // Wait for the callback (with timeout)
-      final code = await oauthFuture.timeout(
-        const Duration(minutes: 5),
-        onTimeout: () {
-          oauthHandler.cancelOAuthFlow();
-          throw 'OAuth authentication timeout. Please try again.';
-        },
-      );
-
-      return code;
-    } catch (e) {
-      oauthHandler.cancelOAuthFlow();
-      rethrow;
-    }
-  }
 
   Future<void> _logoutTrakt() async {
     final confirmed = await showDialog<bool>(
@@ -1379,3 +1402,4 @@ class _AccentColorPicker extends StatelessWidget {
     return luminance > 0.5 ? const material.Color(0xFF000000) : const material.Color(0xFFFFFFFF);
   }
 }
+

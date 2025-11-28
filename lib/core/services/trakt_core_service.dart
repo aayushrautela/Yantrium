@@ -212,6 +212,32 @@ class TraktCoreService {
     }
   }
 
+  /// Force reload authentication state from database
+  /// Useful after saving new tokens
+  Future<void> reloadAuth() async {
+    if (_database == null) {
+      _logger.error('[TraktCoreService] Cannot reload auth: database not set');
+      return;
+    }
+
+    try {
+      final auth = await _database!.getTraktAuth();
+      if (auth != null) {
+        _accessToken = auth.accessToken;
+        _refreshToken = auth.refreshToken;
+        _tokenExpiry = auth.expiresAt.millisecondsSinceEpoch;
+        _logger.info('[TraktCoreService] Auth reloaded, authenticated: ${_accessToken != null}');
+      } else {
+        _accessToken = null;
+        _refreshToken = null;
+        _tokenExpiry = 0;
+        _logger.info('[TraktCoreService] Auth reloaded, no auth found');
+      }
+    } catch (error) {
+      _logger.error('[TraktCoreService] Auth reload failed', error);
+    }
+  }
+
   /// Check if user is authenticated
   Future<bool> isAuthenticated() async {
     await initializeAuth();

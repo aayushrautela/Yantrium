@@ -94,6 +94,8 @@ class ConfigurationService {
   String get traktBaseUrl => 'https://api.trakt.tv';
   String get traktAuthUrl => 'https://trakt.tv/oauth/authorize';
   String get traktTokenUrl => '$traktBaseUrl/oauth/token';
+  String get traktDeviceCodeUrl => '$traktBaseUrl/oauth/device/code';
+  String get traktDeviceTokenUrl => '$traktBaseUrl/oauth/device/token';
   String get traktApiVersion => '2';
 
   // Trakt Scrobbling Configuration

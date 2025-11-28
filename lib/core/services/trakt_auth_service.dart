@@ -7,6 +7,33 @@ import 'configuration_service.dart';
 import 'logging_service.dart';
 import 'trakt_core_service.dart';
 
+/// Device authentication response model
+class DeviceCodeResponse {
+  final String deviceCode;
+  final String userCode;
+  final String verificationUrl;
+  final int interval; // Polling interval in seconds
+  final int expiresIn; // Expiration time in seconds
+
+  DeviceCodeResponse({
+    required this.deviceCode,
+    required this.userCode,
+    required this.verificationUrl,
+    required this.interval,
+    required this.expiresIn,
+  });
+
+  factory DeviceCodeResponse.fromJson(Map<String, dynamic> json) {
+    return DeviceCodeResponse(
+      deviceCode: json['device_code'] as String,
+      userCode: json['user_code'] as String,
+      verificationUrl: json['verification_url'] as String,
+      interval: json['interval'] as int,
+      expiresIn: json['expires_in'] as int,
+    );
+  }
+}
+
 /// Service for Trakt authentication operations
 class TraktAuthService {
   final AppDatabase _database;
@@ -22,16 +49,6 @@ class TraktAuthService {
   /// Check if Trakt is configured (has client ID and secret)
   bool get isConfigured => _config.isTraktConfigured;
 
-  /// Get the authorization URL for OAuth login
-  String getAuthorizationUrl() {
-    final params = Uri(queryParameters: {
-      'response_type': 'code',
-      'client_id': _config.traktClientId,
-      'redirect_uri': _config.traktRedirectUri,
-    });
-    return '${_config.traktAuthUrl}?${params.query}';
-  }
-
   /// Check if user is authenticated
   Future<bool> isAuthenticated() async {
     return await _coreService.isAuthenticated();
@@ -42,27 +59,17 @@ class TraktAuthService {
     return await _coreService.getAccessToken();
   }
 
-  /// Exchange authorization code for access token
-  Future<bool> exchangeCodeForToken(String code) async {
-    if (code.trim().isEmpty) {
-      _logger.error('Authorization code is empty');
-      return false;
-    }
-
+  /// Generate device codes for device authentication
+  Future<DeviceCodeResponse?> generateDeviceCode() async {
     try {
-      _logger.debug('Exchanging authorization code for access token');
+      _logger.debug('Generating device code for authentication');
 
       final requestData = {
-        'code': code,
         'client_id': _config.traktClientId,
-        'client_secret': _config.traktClientSecret,
-        'redirect_uri': _config.traktRedirectUri,
-        'grant_type': 'authorization_code',
       };
 
-      // Use Dio directly for token exchange since core service requires auth
       final response = await Dio().post(
-        _config.traktTokenUrl,
+        _config.traktDeviceCodeUrl,
         data: requestData,
         options: Options(
           headers: {
@@ -73,6 +80,44 @@ class TraktAuthService {
         ),
       );
 
+      final data = response.data as Map<String, dynamic>;
+      final deviceCodeResponse = DeviceCodeResponse.fromJson(data);
+
+      _logger.info('Successfully generated device code');
+      return deviceCodeResponse;
+    } catch (e) {
+      _logger.error('Error generating device code', e);
+      if (e is DioException) {
+        _logger.debug('Dio error status: ${e.response?.statusCode}');
+        _logger.debug('Dio error response: ${e.response?.data}');
+      }
+      return null;
+    }
+  }
+
+  /// Poll for access token using device code
+  /// Returns true if successful, false if failed, null if still pending
+  Future<bool?> pollForAccessToken(String deviceCode, int intervalSeconds) async {
+    try {
+      final requestData = {
+        'code': deviceCode,
+        'client_id': _config.traktClientId,
+        'client_secret': _config.traktClientSecret,
+      };
+
+      final response = await Dio().post(
+        _config.traktDeviceTokenUrl,
+        data: requestData,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'trakt-api-version': _config.traktApiVersion,
+            'trakt-api-key': _config.traktClientId,
+          },
+        ),
+      );
+
+      // Success - save tokens
       final data = response.data as Map<String, dynamic>;
       final accessToken = data['access_token'] as String;
       final refreshToken = data['refresh_token'] as String;
@@ -95,14 +140,51 @@ class TraktAuthService {
         ),
       );
 
-      _logger.info('Successfully exchanged code for token');
+      // Reload auth state in core service so it picks up the new tokens immediately
+      await _coreService.reloadAuth();
+
+      _logger.info('Successfully obtained access token via device authentication');
       return true;
-    } catch (e) {
-      _logger.error('Error exchanging code for token', e);
-      if (e is DioException) {
-        _logger.debug('Dio error status: ${e.response?.statusCode}');
-        _logger.debug('Dio error response: ${e.response?.data}');
+    } on DioException catch (e) {
+      final statusCode = e.response?.statusCode;
+      
+      // Handle different status codes according to Trakt API docs
+      switch (statusCode) {
+        case 200:
+          // Should not reach here as this is handled above, but just in case
+          return true;
+        case 400:
+          // Pending - waiting for user to authorize
+          _logger.debug('Device authentication pending - waiting for user authorization');
+          return null;
+        case 404:
+          // Not Found - invalid device_code
+          _logger.error('Invalid device code');
+          return false;
+        case 409:
+          // Already Used - user already approved this code
+          _logger.error('Device code already used');
+          return false;
+        case 410:
+          // Expired - the tokens have expired
+          _logger.error('Device code expired');
+          return false;
+        case 418:
+          // Denied - user explicitly denied this code
+          _logger.error('User denied device authentication');
+          return false;
+        case 429:
+          // Slow Down - polling too quickly
+          _logger.warning('Polling too quickly - should slow down');
+          return null;
+        default:
+          _logger.error('Error polling for access token', e);
+          _logger.debug('Dio error status: $statusCode');
+          _logger.debug('Dio error response: ${e.response?.data}');
+          return false;
       }
+    } catch (e) {
+      _logger.error('Unexpected error polling for access token', e);
       return false;
     }
   }
