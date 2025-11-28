@@ -1076,27 +1076,18 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: _isHovered
-              ? Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 3,
-                )
-              : null,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Clickable(
-            onPressed: widget.onNavigate,
-            child: Container(
-              color: Theme.of(context).colorScheme.background,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Clickable(
+              onPressed: widget.onNavigate,
+              child: Container(
+                color: Theme.of(context).colorScheme.background,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   // Episode image
                   Flexible(
                     flex: 3,
@@ -1106,21 +1097,28 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                           width: double.infinity,
                           child: AspectRatio(
                             aspectRatio: 16 / 9,
-                            child: imageUrl != null
-                                ? Image.network(
-                                    imageUrl,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        Container(
-                                      width: double.infinity,
-                                      color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
-                                    ),
-                                  )
-                                : Container(
-                                    width: double.infinity,
-                                    color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
-                                  ),
+                            child: ClipRect(
+                              child: AnimatedScale(
+                                scale: _isHovered ? 1.1 : 1.0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                child: imageUrl != null
+                                    ? Image.network(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            Container(
+                                          width: double.infinity,
+                                          color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                        ),
+                                      )
+                                    : Container(
+                                        width: double.infinity,
+                                        color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                      ),
+                              ),
+                            ),
                           ),
                         ),
                         // Watched tag
@@ -1290,6 +1288,20 @@ class _EpisodeCardState extends State<_EpisodeCard> {
             ),
           ),
         ),
+          // Border overlay - doesn't change card dimensions
+          if (_isHovered)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
