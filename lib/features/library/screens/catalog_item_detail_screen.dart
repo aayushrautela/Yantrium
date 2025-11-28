@@ -43,6 +43,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   bool _isLoadingCastCrew = false;
   List<CatalogItem> _similarItems = [];
   bool _isLoadingSimilar = false;
+  bool _hasAttemptedLoadSimilar = false;
   List<Season> _seasons = [];
   int _selectedSeasonNumber = 1;
   bool _isLoadingEpisodes = false;
@@ -860,10 +861,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                 errorBuilder: (context, error, stackTrace) {
                                   return Text(
                                     item.name.toUpperCase(),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 60,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.yellow,
+                                      color: Theme.of(context).colorScheme.primary,
                                     ),
                                   );
                                 },
@@ -872,10 +873,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                           else
                             Text(
                               item.name.toUpperCase(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 60,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.yellow,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
 
@@ -923,25 +924,6 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                         style: const TextStyle(fontSize: 16),
                                       ),
                                     )),
-
-                              // HD badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.muted,
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.border,
-                                  ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'HD',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ),
                             ],
                           ),
 
@@ -1607,8 +1589,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   }
 
   Future<void> _loadSimilarItems(CatalogItem item) async {
-    if (_isLoadingSimilar || _similarItems.isNotEmpty) return;
+    if (_isLoadingSimilar || _similarItems.isNotEmpty || _hasAttemptedLoadSimilar) return;
 
+    // Set flag immediately to prevent multiple calls during rebuilds
+    _hasAttemptedLoadSimilar = true;
+    
     setState(() {
       _isLoadingSimilar = true;
     });
@@ -1625,20 +1610,63 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         final similarResults =
             await ServiceLocator.instance.tmdbSearchService.getSimilar(finalTmdbId, item.type == 'series' ? 'tv' : 'movie');
         if (mounted) {
-          setState(() {
-            _similarItems = similarResults.map((result) {
+          final enrichmentService = ServiceLocator.instance.tmdbEnrichmentService;
+          final filteredItems = <CatalogItem>[];
+          
+          for (final result in similarResults) {
+            try {
+              // Apply same filtering as search results
+              final name = item.type == 'movie' ? (result.title ?? '') : (result.name ?? '');
+              final poster = enrichmentService.getImageUrl(result.posterPath);
+              final background = enrichmentService.getImageUrl(result.backdropPath, size: 'w1280');
+              final releaseDate = item.type == 'movie' ? result.releaseDate : result.firstAirDate;
+              final voteAverage = result.voteAverage;
+              
+              // Skip if missing essential metadata or no poster + no voteAverage
+              if (name.isEmpty || 
+                  (poster.isEmpty && voteAverage == 0.0) ||
+                  releaseDate == null || releaseDate.isEmpty) {
+                continue;
+              }
+              
               final tmdbIdStr = 'tmdb:${result.id}';
-              return CatalogItem.fromJson({
+              filteredItems.add(CatalogItem.fromJson({
                 'id': tmdbIdStr,
                 'type': item.type,
-                'name': item.type == 'movie' ? (result.title ?? '') : (result.name ?? ''),
-                'poster': ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(result.posterPath),
-                'background': ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(result.backdropPath, size: 'w1280'),
+                'name': name,
+                'poster': poster,
+                'background': background,
                 'description': result.overview,
-                'releaseInfo': item.type == 'movie' ? result.releaseDate : result.firstAirDate,
-                'imdbRating': result.voteAverage.toString(),
-              });
-            }).toList();
+                'releaseInfo': releaseDate,
+                'imdbRating': voteAverage.toString(),
+                'voteCount': result.voteCount,
+              }));
+            } catch (e) {
+              // Skip invalid items
+              continue;
+            }
+          }
+          
+          // Sort by vote count (highest first), then by rating, then by name
+          filteredItems.sort((a, b) {
+            final voteCountA = a.voteCount ?? 0;
+            final voteCountB = b.voteCount ?? 0;
+            
+            if (voteCountB != voteCountA) {
+              return voteCountB.compareTo(voteCountA);
+            }
+            
+            final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
+            final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
+            
+            if (ratingB != ratingA) {
+              return ratingB.compareTo(ratingA);
+            }
+            return a.name.compareTo(b.name);
+          });
+          
+          setState(() {
+            _similarItems = filteredItems;
             _isLoadingSimilar = false;
           });
           return;
@@ -1656,8 +1684,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   }
 
   Widget _buildMoreLikeThisContent(CatalogItem item) {
-    // Load similar items when this tab is selected
-    if (!_isLoadingSimilar && _similarItems.isEmpty) {
+    // Load similar items when this tab is selected (only if we haven't attempted yet)
+    if (!_isLoadingSimilar && _similarItems.isEmpty && !_hasAttemptedLoadSimilar) {
       _loadSimilarItems(item);
     }
 
@@ -1672,9 +1700,23 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       return SizedBox(
         height: 400,
         child: Center(
-          child: Text(
-            'No similar titles available',
-            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off,
+                size: 48,
+                color: Theme.of(context).colorScheme.mutedForeground,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No similar ${item.type == 'series' ? 'shows' : 'movies'} found',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.mutedForeground,
+                  fontSize: 18,
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -1871,7 +1913,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                   : Colors.transparent,
                               border: Border(
                                 left: BorderSide(
-                                  color: isSelected ? Colors.yellow : Colors.transparent,
+                                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
                                   width: 3,
                                 ),
                               ),
@@ -1883,7 +1925,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                     season.name,
                                     style: TextStyle(
                                       color: isSelected
-                                          ? Colors.yellow
+                                          ? Theme.of(context).colorScheme.primary
                                           : Theme.of(context).colorScheme.foreground,
                                       fontWeight:
                                           isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1891,10 +1933,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                   ),
                                 ),
                                 if (isSelected)
-                                  const Icon(
+                                  Icon(
                                     Icons.arrow_forward_ios,
                                     size: 12,
-                                    color: Colors.yellow,
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                               ],
                             ),
@@ -2050,7 +2092,7 @@ class _TabButton extends StatelessWidget {
               fontSize: 18,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               color: isSelected
-                  ? Colors.yellow
+                  ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.foreground,
             ),
           ),
@@ -2059,7 +2101,7 @@ class _TabButton extends StatelessWidget {
             Container(
               height: 2,
               width: label.length * 10.0,
-              color: Colors.yellow,
+              color: Theme.of(context).colorScheme.primary,
             ),
         ],
       ),
@@ -2758,34 +2800,8 @@ class _StreamSelectionDialog extends StatelessWidget {
   });
 
   String _getStreamDisplayName(StreamInfo stream) {
-    // If title looks like a detailed description (contains newlines or is long),
-    // use it directly as addons like Torrentio provide nicely formatted descriptions
-    if (stream.title != null && stream.title!.isNotEmpty) {
-      final title = stream.title!.trim();
-      // Check if title contains newlines or looks like a full description
-      if (title.contains('\n') || title.length > 50) {
-        return title.replaceAll('\n', ' '); // Replace newlines with spaces for single line display
-      }
-    }
-
-    // Fall back to reconstructing from individual fields for simple titles
-    final parts = <String>[];
-    
-    if (stream.name != null && stream.name!.isNotEmpty) {
-      parts.add(stream.name!);
-    } else if (stream.title != null && stream.title!.isNotEmpty) {
-      parts.add(stream.title!);
-    }
-    
-    if (stream.quality != null && stream.quality!.isNotEmpty) {
-      parts.add(stream.quality!);
-    }
-    
-    if (stream.addonName != null && stream.addonName!.isNotEmpty) {
-      parts.add('(${stream.addonName})');
-    }
-    
-    return parts.isNotEmpty ? parts.join(' • ') : 'Stream';
+    // Display name as heading (like NuvioStreaming)
+    return stream.name ?? stream.title ?? 'Unnamed Stream';
   }
 
   @override
@@ -2914,43 +2930,18 @@ class _StreamItemState extends State<_StreamItem> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.displayName).semiBold(),
-                    if (widget.stream.description != null &&
-                        widget.stream.description!.isNotEmpty) ...[
+                    if ((widget.stream.description != null &&
+                        widget.stream.description!.isNotEmpty) ||
+                        (widget.stream.title != null &&
+                        widget.stream.title!.isNotEmpty)) ...[
                       const SizedBox(height: 4),
                       Text(
-                        widget.stream.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        widget.stream.description ?? widget.stream.title ?? '',
                       ).muted().small(),
                     ],
                   ],
                 ),
               ),
-              
-              const SizedBox(width: 12),
-              
-              // Quality badge
-              if (widget.stream.quality != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.muted,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.border,
-                    ),
-                  ),
-                  child: Text(
-                    widget.stream.quality!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

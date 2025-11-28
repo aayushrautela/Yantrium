@@ -82,15 +82,28 @@ class _SearchOverlayState extends State<SearchOverlay> {
       for (final movieData in movieResults) {
         try {
           final tmdbIdStr = 'tmdb:${movieData.id}';
+          final name = movieData.title ?? '';
+          final poster = enrichmentService.getImageUrl(movieData.posterPath);
+          final background = enrichmentService.getImageUrl(movieData.backdropPath, size: 'w1280');
+          final releaseDate = movieData.releaseDate;
+          final voteAverage = movieData.voteAverage;
+          
+          // Skip if missing essential metadata or no poster + no voteAverage
+          if (name.isEmpty || 
+              (poster.isEmpty && voteAverage == 0.0) ||
+              releaseDate == null || releaseDate.isEmpty) {
+            continue;
+          }
           allResults.add(CatalogItem.fromJson({
             'id': tmdbIdStr,
             'type': 'movie',
-            'name': movieData.title ?? '',
-            'poster': enrichmentService.getImageUrl(movieData.posterPath),
-            'background': enrichmentService.getImageUrl(movieData.backdropPath, size: 'w1280'),
+            'name': name,
+            'poster': poster,
+            'background': background,
             'description': movieData.overview,
-            'releaseInfo': movieData.releaseDate,
-            'imdbRating': movieData.voteAverage.toString(),
+            'releaseInfo': releaseDate,
+            'imdbRating': voteAverage.toString(),
+            'voteCount': movieData.voteCount,
           }));
         } catch (e) {
           // Skip invalid items
@@ -101,15 +114,28 @@ class _SearchOverlayState extends State<SearchOverlay> {
       for (final tvData in tvResults) {
         try {
           final tmdbIdStr = 'tmdb:${tvData.id}';
+          final name = tvData.name ?? '';
+          final poster = enrichmentService.getImageUrl(tvData.posterPath);
+          final background = enrichmentService.getImageUrl(tvData.backdropPath, size: 'w1280');
+          final firstAirDate = tvData.firstAirDate;
+          final voteAverage = tvData.voteAverage;
+          
+          // Skip if missing essential metadata or no poster + no voteAverage
+          if (name.isEmpty || 
+              (poster.isEmpty && voteAverage == 0.0) ||
+              firstAirDate == null || firstAirDate.isEmpty) {
+            continue;
+          }
           allResults.add(CatalogItem.fromJson({
             'id': tmdbIdStr,
             'type': 'series',
-            'name': tvData.name ?? '',
-            'poster': enrichmentService.getImageUrl(tvData.posterPath),
-            'background': enrichmentService.getImageUrl(tvData.backdropPath, size: 'w1280'),
+            'name': name,
+            'poster': poster,
+            'background': background,
             'description': tvData.overview,
-            'releaseInfo': tvData.firstAirDate,
-            'imdbRating': tvData.voteAverage.toString(),
+            'releaseInfo': firstAirDate,
+            'imdbRating': voteAverage.toString(),
+            'voteCount': tvData.voteCount,
           }));
         } catch (e) {
           // Skip invalid items
@@ -117,8 +143,15 @@ class _SearchOverlayState extends State<SearchOverlay> {
         }
       }
       
-      // Sort by rating (highest first), then by name
+      // Sort by vote count (highest first), then by rating, then by name
       allResults.sort((a, b) {
+        final voteCountA = a.voteCount ?? 0;
+        final voteCountB = b.voteCount ?? 0;
+        
+        if (voteCountB != voteCountA) {
+          return voteCountB.compareTo(voteCountA);
+        }
+        
         final ratingA = double.tryParse(a.imdbRating ?? '0') ?? 0.0;
         final ratingB = double.tryParse(b.imdbRating ?? '0') ?? 0.0;
         

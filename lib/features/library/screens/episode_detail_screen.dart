@@ -1376,34 +1376,8 @@ class _StreamSelectionDialog extends StatelessWidget {
   });
 
   String _getStreamDisplayName(StreamInfo stream) {
-    // If title looks like a detailed description (contains newlines or is long),
-    // use it directly as addons like Torrentio provide nicely formatted descriptions
-    if (stream.title != null && stream.title!.isNotEmpty) {
-      final title = stream.title!.trim();
-      // Check if title contains newlines or looks like a full description
-      if (title.contains('\n') || title.length > 50) {
-        return title.replaceAll('\n', ' '); // Replace newlines with spaces for single line display
-      }
-    }
-
-    // Fall back to reconstructing from individual fields for simple titles
-    final parts = <String>[];
-    
-    if (stream.name != null && stream.name!.isNotEmpty) {
-      parts.add(stream.name!);
-    } else if (stream.title != null && stream.title!.isNotEmpty) {
-      parts.add(stream.title!);
-    }
-    
-    if (stream.quality != null && stream.quality!.isNotEmpty) {
-      parts.add(stream.quality!);
-    }
-    
-    if (stream.addonName != null && stream.addonName!.isNotEmpty) {
-      parts.add('(${stream.addonName})');
-    }
-    
-    return parts.isNotEmpty ? parts.join(' \u2022 ') : 'Stream';
+    // Display name as heading (like NuvioStreaming)
+    return stream.name ?? stream.title ?? 'Unnamed Stream';
   }
 
   @override
@@ -1488,61 +1462,6 @@ class _StreamItem extends StatefulWidget {
 class _StreamItemState extends State<_StreamItem> {
   bool _isHovered = false;
 
-  String _getAllStreamData() {
-    final parts = <String>[];
-    
-    if (widget.stream.id != null) {
-      parts.add('id: ${widget.stream.id}');
-    }
-    if (widget.stream.title != null && widget.stream.title!.isNotEmpty) {
-      parts.add('title: ${widget.stream.title}');
-    }
-    if (widget.stream.name != null && widget.stream.name!.isNotEmpty) {
-      parts.add('name: ${widget.stream.name}');
-    }
-    if (widget.stream.description != null && widget.stream.description!.isNotEmpty) {
-      parts.add('description: ${widget.stream.description}');
-    }
-    if (widget.stream.url.isNotEmpty) {
-      parts.add('url: ${widget.stream.url.substring(0, widget.stream.url.length > 50 ? 50 : widget.stream.url.length)}${widget.stream.url.length > 50 ? "..." : ""}');
-    }
-    if (widget.stream.quality != null && widget.stream.quality!.isNotEmpty) {
-      parts.add('quality: ${widget.stream.quality}');
-    }
-    if (widget.stream.type != null && widget.stream.type!.isNotEmpty) {
-      parts.add('type: ${widget.stream.type}');
-    }
-    if (widget.stream.addonId != null && widget.stream.addonId!.isNotEmpty) {
-      parts.add('addonId: ${widget.stream.addonId}');
-    }
-    if (widget.stream.addonName != null && widget.stream.addonName!.isNotEmpty) {
-      parts.add('addonName: ${widget.stream.addonName}');
-    }
-    if (widget.stream.infoHash != null && widget.stream.infoHash!.isNotEmpty) {
-      parts.add('infoHash: ${widget.stream.infoHash}');
-    }
-    if (widget.stream.fileIdx != null) {
-      parts.add('fileIdx: ${widget.stream.fileIdx}');
-    }
-    if (widget.stream.size != null) {
-      parts.add('size: ${widget.stream.size}');
-    }
-    if (widget.stream.isFree != null) {
-      parts.add('isFree: ${widget.stream.isFree}');
-    }
-    if (widget.stream.isDebrid != null) {
-      parts.add('isDebrid: ${widget.stream.isDebrid}');
-    }
-    if (widget.stream.subtitles != null && widget.stream.subtitles!.isNotEmpty) {
-      parts.add('subtitles: ${widget.stream.subtitles!.length} available');
-    }
-    if (widget.stream.behaviorHints != null && widget.stream.behaviorHints!.isNotEmpty) {
-      parts.add('behaviorHints: ${widget.stream.behaviorHints}');
-    }
-    
-    return parts.join(', ');
-  }
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -1587,44 +1506,18 @@ class _StreamItemState extends State<_StreamItem> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.displayName).semiBold(),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getAllStreamData(),
-                      maxLines: 10,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                      ),
-                    ).muted().small(),
+                    if ((widget.stream.description != null &&
+                        widget.stream.description!.isNotEmpty) ||
+                        (widget.stream.title != null &&
+                        widget.stream.title!.isNotEmpty)) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.stream.description ?? widget.stream.title ?? '',
+                      ).muted().small(),
+                    ],
                   ],
                 ),
               ),
-              
-              const SizedBox(width: 12),
-              
-              // Quality badge
-              if (widget.stream.quality != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.muted,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.border,
-                    ),
-                  ),
-                  child: Text(
-                    widget.stream.quality!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

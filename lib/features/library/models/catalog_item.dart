@@ -11,6 +11,7 @@ class CatalogItem {
   final List<String>? genres;
   final String? imdbRating;
   final String? runtime;
+  final int? voteCount;
 
   CatalogItem({
     required this.id,
@@ -24,6 +25,7 @@ class CatalogItem {
     this.genres,
     this.imdbRating,
     this.runtime,
+    this.voteCount,
   });
 
   factory CatalogItem.fromJson(Map<String, dynamic> json) {
@@ -67,6 +69,7 @@ class CatalogItem {
       genres: safeStringList(json['genres']),
       imdbRating: safeString(json['imdbRating']),
       runtime: safeString(json['runtime']),
+      voteCount: json['voteCount'] is int ? json['voteCount'] as int : (json['voteCount'] is String ? int.tryParse(json['voteCount'] as String) : null),
     );
   }
 
@@ -83,6 +86,7 @@ class CatalogItem {
       if (genres != null) 'genres': genres,
       if (imdbRating != null) 'imdbRating': imdbRating,
       if (runtime != null) 'runtime': runtime,
+      if (voteCount != null) 'voteCount': voteCount,
     };
   }
 
@@ -99,6 +103,7 @@ class CatalogItem {
     List<String>? genres,
     String? imdbRating,
     String? runtime,
+    int? voteCount,
   }) {
     return CatalogItem(
       id: id ?? this.id,
@@ -112,6 +117,7 @@ class CatalogItem {
       genres: genres ?? this.genres,
       imdbRating: imdbRating ?? this.imdbRating,
       runtime: runtime ?? this.runtime,
+      voteCount: voteCount ?? this.voteCount,
     );
   }
 }
