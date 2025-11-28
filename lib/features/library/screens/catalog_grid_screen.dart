@@ -2,7 +2,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:flutter/services.dart'; // For SystemMouseCursors
 import 'package:flutter/animation.dart'; // For AnimationController
-import 'package:flutter/material.dart' as material; // For Colors, material.CircularProgressIndicator
+import 'package:flutter/material.dart' as material; // For Colors only
 import 'dart:async'; // For Timer
 import '../models/catalog_item.dart';
 import '../logic/library_repository.dart';
@@ -465,7 +465,7 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
         // Results
         Expanded(
           child: _isSearching
-              ? const Center(child: material.CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator())
               : filteredResults.isEmpty
                   ? Center(
                       child: Column(
@@ -1340,7 +1340,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                               return const SizedBox(
                                 width: 800,
                                 height: 300,
-                                child: Center(child: material.CircularProgressIndicator()),
+                                child: Center(child: CircularProgressIndicator()),
                               );
                             },
                           ),

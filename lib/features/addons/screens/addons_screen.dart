@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../models/addon_config.dart';
 import '../logic/addon_repository.dart';
 import '../../../core/database/app_database.dart';

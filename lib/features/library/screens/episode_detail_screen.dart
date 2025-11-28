@@ -395,7 +395,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
-        child: material.CircularProgressIndicator(),
+        child: CircularProgressIndicator(),
       ),
     );
     
@@ -537,7 +537,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
-        child: material.CircularProgressIndicator(),
+        child: CircularProgressIndicator(),
       ),
     );
     
@@ -682,7 +682,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     if (_isLoadingEpisodes) {
       return const SizedBox(
         height: 400,
-        child: Center(child: material.CircularProgressIndicator()),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 

@@ -2435,7 +2435,7 @@ class _CastCrewCardState extends State<_CastCrewCard> {
                             height: imageSize,
                             color: Theme.of(context).colorScheme.muted,
                             child: const Center(
-                              child: material.CircularProgressIndicator(),
+                              child: CircularProgressIndicator(),
                             ),
                           );
                         },
@@ -2583,7 +2583,7 @@ class _SimilarItemCardState extends State<_SimilarItemCard> {
                                 height: widget.cardWidth * 1.5,
                                 color: Theme.of(context).colorScheme.muted,
                                 child: const Center(
-                                    child: material.CircularProgressIndicator()),
+                                    child: CircularProgressIndicator()),
                               );
                             },
                           )

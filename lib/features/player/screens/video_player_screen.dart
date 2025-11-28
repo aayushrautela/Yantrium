@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:video_player/video_player.dart';
 import '../logic/fvp_player_controller.dart';
 import '../../../core/widgets/back_button_overlay.dart';
@@ -276,8 +277,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start playback: $e')),
+        material.ScaffoldMessenger.of(context).showSnackBar(
+          material.SnackBar(content: Text('Failed to start playback: $e')),
         );
       }
     }
@@ -311,11 +312,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black,
+    final colorScheme = Theme.of(context).colorScheme;
+    return material.Material(
+      color: colorScheme.background,
       child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
+        backgroundColor: colorScheme.background,
+        child: Stack(
           alignment: Alignment.center,
           children: [
             // 1. Video player (bottom layer)
@@ -365,7 +367,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     height: 200,
                     child: MouseRegion(
                       onEnter: (_) => _onControlsHoverEnter(),
-                      child: Container(color: Colors.transparent),
+                      child: Container(color: material.Colors.transparent),
                     ),
                   );
                 }
@@ -396,8 +398,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildPausedOverlay() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      color: Colors.black.withOpacity(0.8),
+      color: colorScheme.background.withValues(alpha: 0.8),
       child: Stack(
         children: [
           Align(
@@ -434,13 +437,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: Colors.blueAccent,
+                              color: colorScheme.primary,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               'SEASON ${widget.seasonNumber}',
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: colorScheme.foreground,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold),
                             ),
@@ -449,7 +452,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           Text(
                             'EPISODE ${widget.episodeNumber}',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
+                                color: colorScheme.foreground.withValues(alpha: 0.8),
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -460,8 +463,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     // Title
                     Text(
                       widget.episodeName ?? widget.title ?? 'Unknown Title',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colorScheme.foreground,
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
                       ),
@@ -475,7 +478,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
+                          color: colorScheme.foreground.withValues(alpha: 0.75),
                           fontSize: 16,
                           height: 1.6,
                         ),
@@ -483,22 +486,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     const SizedBox(height: 40),
 
                     // Resume button
-                    ElevatedButton(
+                    PrimaryButton(
                       onPressed: () => _controller.togglePlayPause(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 20),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.play_arrow, size: 28),
-                          SizedBox(width: 12),
-                          Text('RESUME',
+                          const SizedBox(width: 12),
+                          const Text('RESUME',
                               style: TextStyle(
                                   fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
@@ -543,8 +538,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       Expanded(
                         child: Text(
                           widget.title ?? '',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.foreground,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -576,6 +571,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildBottomControls() {
+    final colorScheme = Theme.of(context).colorScheme;
     return StreamBuilder<bool>(
       stream: _controller.playingStream,
       initialData: false,
@@ -593,32 +589,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  colors: [material.Colors.transparent, colorScheme.background.withValues(alpha: 0.8)],
                 ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Progress bar
-                  Slider(
+                  material.Slider(
                     value: duration > 0 ? position.clamp(0.0, duration) : 0.0,
                     max: duration > 0 ? duration : 1.0,
                     onChanged: (value) {
                       _controller.seek(value);
                       _onControlInteraction();
                     },
-                    activeColor: Colors.white,
-                    inactiveColor: Colors.white30,
+                    activeColor: colorScheme.foreground,
+                    inactiveColor: colorScheme.foreground.withValues(alpha: 0.3),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(_formatDuration(position),
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(
+                              color: colorScheme.foreground.withValues(alpha: 0.7), fontSize: 12)),
                       Text(_formatDuration(duration),
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(
+                              color: colorScheme.foreground.withValues(alpha: 0.7), fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -640,21 +636,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     : volume > 0
                                         ? Icons.volume_down
                                         : Icons.volume_off,
-                                color: Colors.white,
+                                color: colorScheme.foreground,
                                 size: 28,
                               ),
                               const SizedBox(width: 8),
                               SizedBox(
                                 width: 120,
-                                child: Slider(
+                                child: material.Slider(
                                   value: volume,
                                   max: 100.0,
                                   onChanged: (value) {
                                     _controller.setVolume(value);
                                     _onControlInteraction();
                                   },
-                                  activeColor: Colors.white,
-                                  inactiveColor: Colors.white30,
+                                  activeColor: colorScheme.foreground,
+                                  inactiveColor: colorScheme.foreground.withValues(alpha: 0.3),
                                 ),
                               ),
                             ],
@@ -666,8 +662,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.replay_10,
-                                color: Colors.white, size: 36),
+                            variance: ButtonVariance.ghost,
+                            icon: Icon(Icons.replay_10,
+                                color: colorScheme.foreground, size: 36),
                             onPressed: () {
                               _controller.seek(position - 10);
                               _onControlInteraction();
@@ -675,9 +672,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           const SizedBox(width: 20),
                           IconButton(
+                            variance: ButtonVariance.ghost,
                             icon: Icon(
                                 isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: Colors.white,
+                                color: colorScheme.foreground,
                                 size: 48),
                             onPressed: () {
                               _controller.togglePlayPause();
@@ -686,8 +684,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           const SizedBox(width: 20),
                           IconButton(
-                            icon: const Icon(Icons.forward_10,
-                                color: Colors.white, size: 36),
+                            variance: ButtonVariance.ghost,
+                            icon: Icon(Icons.forward_10,
+                                color: colorScheme.foreground, size: 36),
                             onPressed: () {
                               _controller.seek(position + 10);
                               _onControlInteraction();
@@ -699,33 +698,36 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       // Right side: Subtitles, Stream, Audio, Settings
                       Row(
                         children: [
-                          TextButton(
+                          GhostButton(
                             onPressed: () {
                               // TODO: Implement stream selection
                             },
-                            child: const Text(
+                            child: Text(
                               'Stream: 1',
                               style:
-                                  TextStyle(color: Colors.white, fontSize: 16),
+                                  TextStyle(color: colorScheme.foreground, fontSize: 16),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.audiotrack,
-                                color: Colors.white, size: 28),
+                            variance: ButtonVariance.ghost,
+                            icon: Icon(Icons.audiotrack,
+                                color: colorScheme.foreground, size: 28),
                             onPressed: () {
                               // TODO: Implement audio stream selection
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.closed_caption,
-                                color: Colors.white, size: 28),
+                            variance: ButtonVariance.ghost,
+                            icon: Icon(Icons.closed_caption,
+                                color: colorScheme.foreground, size: 28),
                             onPressed: () {
                               // TODO: Implement subtitle selection
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.settings,
-                                color: Colors.white, size: 28),
+                            variance: ButtonVariance.ghost,
+                            icon: Icon(Icons.settings,
+                                color: colorScheme.foreground, size: 28),
                             onPressed: () {
                               // TODO: Implement settings
                             },
