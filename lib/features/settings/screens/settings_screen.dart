@@ -1278,7 +1278,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                         child: Progress(
                           progress: (progress * 100).clamp(0, 100),
