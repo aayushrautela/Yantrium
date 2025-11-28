@@ -1060,6 +1060,13 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     }
   }
 
+  /// Format episode air date for display
+  String _formatEpisodeDate(String airDate) {
+    // TMDB dates are typically in YYYY-MM-DD format, return as is
+    // If we need to format differently, parse and reformat here
+    return airDate;
+  }
+
   @override
   Widget build(BuildContext context) {
     final imageUrl = widget.episode.stillPath != null
@@ -1122,22 +1129,87 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             top: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: material.Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Watched',
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
                           ),
-                        // Play button overlay (shown on hover) - only play button opens streams
+                        // Runtime overlay
+                        if (widget.episode.runtime != null)
+                          Positioned(
+                            bottom: 8,
+                            right: widget.episode.airDate != null ? 120 : 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: material.Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                '${widget.episode.runtime}m',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Date overlay
+                        if (widget.episode.airDate != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: material.Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                _formatEpisodeDate(widget.episode.airDate!),
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
                         if (_isHovered)
                           Positioned.fill(
                             child: GestureDetector(
