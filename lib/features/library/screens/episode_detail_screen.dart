@@ -133,12 +133,12 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
 
       if (finalTmdbId != null) {
         // Fetch just the current season to get the episode details quickly
-        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, widget.seasonNumber);
+        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, _selectedSeasonNumber);
         
         if (seasonData != null && seasonData['episodes'] != null && mounted) {
           final episodes = seasonData['episodes'] as List<dynamic>;
           final episodeData = episodes.firstWhere(
-            (e) => e['episode_number'] == widget.episode.episodeNumber,
+            (e) => e['episode_number'] == _currentEpisode.episodeNumber,
             orElse: () => null,
           );
 
@@ -152,6 +152,58 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error fetching current episode details: $e');
+      }
+    }
+  }
+
+  /// Switch to a different episode on the current page
+  Future<void> _switchToEpisode(Episode episode, int seasonNumber) async {
+    if (kDebugMode) {
+      debugPrint('Switching to episode: ${episode.name} (S${seasonNumber}E${episode.episodeNumber})');
+    }
+    
+    setState(() {
+      _currentEpisode = episode;
+      _selectedSeasonNumber = seasonNumber;
+    });
+
+    // Fetch episode details if needed
+    if (episode.airDate == null || episode.stillPath == null || episode.overview == null || episode.runtime == null) {
+      await _fetchEpisodeDetails(episode, seasonNumber);
+    }
+  }
+
+  /// Fetch details for a specific episode
+  Future<void> _fetchEpisodeDetails(Episode episode, int seasonNumber) async {
+    try {
+      final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
+      int? finalTmdbId = tmdbId;
+
+      if (finalTmdbId == null && IdParser.isImdbId(widget.seriesItem.id)) {
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.seriesItem.id);
+      }
+
+      if (finalTmdbId != null) {
+        // Fetch the season to get the episode details
+        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, seasonNumber);
+        
+        if (seasonData != null && seasonData['episodes'] != null && mounted) {
+          final episodes = seasonData['episodes'] as List<dynamic>;
+          final episodeData = episodes.firstWhere(
+            (e) => e['episode_number'] == episode.episodeNumber,
+            orElse: () => null,
+          );
+
+          if (episodeData != null && mounted) {
+            setState(() {
+              _currentEpisode = Episode.fromJson(episodeData);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error fetching episode details: $e');
       }
     }
   }
@@ -656,17 +708,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                           seriesItem: widget.seriesItem,
                           seasonNumber: episodeData.seasonNumber,
                           onPlay: () => _handleEpisodePlay(widget.seriesItem, episodeData.seasonNumber, episodeData.episode),
-                          onNavigate: () {
-                            Navigator.of(context).pushReplacement(
-                              material.MaterialPageRoute(
-                                builder: (context) => EpisodeDetailScreen(
-                                  seriesItem: widget.seriesItem,
-                                  episode: episodeData.episode,
-                                  seasonNumber: episodeData.seasonNumber,
-                                ),
-                              ),
-                            );
-                          },
+                          onNavigate: () => _switchToEpisode(episodeData.episode, episodeData.seasonNumber),
                         ),
                       ),
                     );
@@ -1081,7 +1123,12 @@ class _EpisodeCardState extends State<_EpisodeCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Clickable(
-              onPressed: widget.onNavigate,
+              onPressed: () {
+                if (kDebugMode) {
+                  debugPrint('Episode card clicked - navigating to: ${widget.episode.name}');
+                }
+                widget.onNavigate();
+              },
               child: Container(
                 color: Theme.of(context).colorScheme.background,
                 child: Column(
@@ -1208,30 +1255,39 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                               ),
                             ),
                           ),
+                        // Background overlay that ignores pointer events
                         if (_isHovered)
                           Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {}, // Stop propagation
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Play button that captures clicks - use AbsorbPointer to only capture button area
+                        if (_isHovered)
+                          Center(
+                            child: AbsorbPointer(
+                              absorbing: false,
                               child: Clickable(
-                                onPressed: widget.onPlay,
+                                onPressed: () {
+                                  if (kDebugMode) {
+                                    debugPrint('Play button clicked for: ${widget.episode.name}');
+                                  }
+                                  widget.onPlay();
+                                },
                                 child: Container(
+                                  padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: Theme.of(context).colorScheme.primary,
+                                    shape: BoxShape.circle,
                                   ),
-                                  child: Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.play_arrow,
-                                        color: Colors.white,
-                                        size: 40,
-                                      ),
-                                    ),
+                                  child: const Icon(
+                                    Icons.play_arrow,
+                                    color: Colors.white,
+                                    size: 40,
                                   ),
                                 ),
                               ),
@@ -1291,12 +1347,14 @@ class _EpisodeCardState extends State<_EpisodeCard> {
           // Border overlay - doesn't change card dimensions
           if (_isHovered)
             Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 3,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    ),
                   ),
                 ),
               ),
