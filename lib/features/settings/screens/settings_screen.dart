@@ -1215,6 +1215,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Clear all existing watch history first
       await database.clearWatchHistory();
+      
+      // Also clear the last sync timestamp to force a completely fresh sync from scratch
+      // This ensures we get all history, not just recent changes if any timestamp remained
+      await database.deleteSetting('last_trakt_sync');
 
       // Then sync fresh data from Trakt
       final syncedCount = await watchHistoryService.syncWatchHistory(forceRefresh: true);

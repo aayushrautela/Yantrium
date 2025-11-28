@@ -492,12 +492,18 @@ class TraktWatchedItem {
   });
 
   factory TraktWatchedItem.fromJson(Map<String, dynamic> json) {
+    // Helper to deeply convert seasons/episodes data
+    List<Map<String, dynamic>>? parseSeasons(List<dynamic>? seasonsList) {
+      if (seasonsList == null) return null;
+      return seasonsList.map((s) => Map<String, dynamic>.from(s)).toList();
+    }
+
     return TraktWatchedItem(
       movie: json['movie'] != null ? TraktMovie.fromJson(json['movie']) : null,
       show: json['show'] != null ? TraktShow.fromJson(json['show']) : null,
       plays: json['plays'] as int? ?? 0,
       lastWatchedAt: DateTime.parse(json['last_watched_at'] as String),
-      seasons: (json['seasons'] as List<dynamic>?)?.cast<Map<String, dynamic>>(),
+      seasons: parseSeasons(json['seasons'] as List<dynamic>?),
     );
   }
 

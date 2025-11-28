@@ -1058,7 +1058,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   @override
   void didUpdateWidget(_EpisodeCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber) {
+    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber || oldWidget.seasonNumber != widget.seasonNumber) {
       _currentEpisode = widget.episode;
       _checkWatchedStatus();
     } else if (oldWidget.seriesItem.id != widget.seriesItem.id) {
