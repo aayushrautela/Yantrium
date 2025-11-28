@@ -208,11 +208,25 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     }
   }
 
+  /// Format a single date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatSingleDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        final year = parts[0];
+        final month = parts[1].padLeft(2, '0');
+        final day = parts[2].padLeft(2, '0');
+        return '$day-$month-$year';
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   /// Format episode air date for display
   String _formatEpisodeDate(String airDate) {
-    // TMDB dates are typically in YYYY-MM-DD format, return as is
-    // If we need to format differently, parse and reformat here
-    return airDate;
+    return _formatSingleDate(airDate);
   }
 
   Future<void> _loadSeasonsAndEpisodes() async {
@@ -1102,11 +1116,25 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     }
   }
 
+  /// Format a single date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatSingleDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        final year = parts[0];
+        final month = parts[1].padLeft(2, '0');
+        final day = parts[2].padLeft(2, '0');
+        return '$day-$month-$year';
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   /// Format episode air date for display
   String _formatEpisodeDate(String airDate) {
-    // TMDB dates are typically in YYYY-MM-DD format, return as is
-    // If we need to format differently, parse and reformat here
-    return airDate;
+    return _formatSingleDate(airDate);
   }
 
   @override

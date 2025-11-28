@@ -1394,21 +1394,55 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     );
   }
 
+  /// Format date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatDate(String dateStr) {
+    try {
+      // Handle date ranges (e.g., "2022-09-27 - 2025-11-23")
+      if (dateStr.contains(' - ')) {
+        final parts = dateStr.split(' - ');
+        final firstDate = _formatSingleDate(parts[0].trim());
+        final secondDate = _formatSingleDate(parts[1].trim());
+        return '$firstDate - $secondDate';
+      }
+      return _formatSingleDate(dateStr);
+    } catch (e) {
+      // If parsing fails, return original string
+      return dateStr;
+    }
+  }
+
+  /// Format a single date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatSingleDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        final year = parts[0];
+        final month = parts[1].padLeft(2, '0');
+        final day = parts[2].padLeft(2, '0');
+        return '$day-$month-$year';
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   /// Extract the first date from a date string (handles date ranges like "2022-09-27 - 2025-11-23")
   String _extractFirstDate(String releaseInfo) {
     // If it contains " - " (space-hyphen-space), it's a date range - take the first part
+    String dateStr;
     if (releaseInfo.contains(' - ')) {
-      return releaseInfo.split(' - ').first.trim();
+      dateStr = releaseInfo.split(' - ').first.trim();
+    } else {
+      dateStr = releaseInfo;
     }
-    // Otherwise, just return the date as is
-    return releaseInfo;
+    // Format the date to dd-mm-yyyy
+    return _formatSingleDate(dateStr);
   }
 
   /// Format episode air date for display
   String _formatEpisodeDate(String airDate) {
-    // TMDB dates are typically in YYYY-MM-DD format, return as is
-    // If we need to format differently, parse and reformat here
-    return airDate;
+    return _formatSingleDate(airDate);
   }
 
   /// Build a row of rating icons (TMDB, IMDb, Rotten Tomatoes, Metacritic)
@@ -2507,11 +2541,25 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     }
   }
 
+  /// Format a single date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatSingleDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        final year = parts[0];
+        final month = parts[1].padLeft(2, '0');
+        final day = parts[2].padLeft(2, '0');
+        return '$day-$month-$year';
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   /// Format episode air date for display
   String _formatEpisodeDate(String airDate) {
-    // TMDB dates are typically in YYYY-MM-DD format, return as is
-    // If we need to format differently, parse and reformat here
-    return airDate;
+    return _formatSingleDate(airDate);
   }
 
   /// Check if episode is not released yet

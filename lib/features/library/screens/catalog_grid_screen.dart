@@ -937,14 +937,33 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
     }
   }
 
+  /// Format a single date from YYYY-MM-DD to dd-mm-yyyy
+  String _formatSingleDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        final year = parts[0];
+        final month = parts[1].padLeft(2, '0');
+        final day = parts[2].padLeft(2, '0');
+        return '$day-$month-$year';
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   /// Extract the first date from a date string (handles date ranges like "2022-09-27 - 2025-11-23")
   String _extractFirstDate(String releaseInfo) {
     // If it contains " - " (space-hyphen-space), it's a date range - take the first part
+    String dateStr;
     if (releaseInfo.contains(' - ')) {
-      return releaseInfo.split(' - ').first.trim();
+      dateStr = releaseInfo.split(' - ').first.trim();
+    } else {
+      dateStr = releaseInfo;
     }
-    // Otherwise, just return the date as is
-    return releaseInfo;
+    // Format the date to dd-mm-yyyy
+    return _formatSingleDate(dateStr);
   }
 
   @override
