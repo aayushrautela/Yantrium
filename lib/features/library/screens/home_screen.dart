@@ -34,6 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _navigateTo(int index) {
     setState(() {
       _currentIndex = index;
+      // Clear search when navigating to Home or Library tabs
+      if (index == 0 || index == 1) {
+        _searchController.clear();
+      }
       // Refresh library when switching to library tab
       if (index == 1 && _libraryScreenKey.currentState != null) {
         (_libraryScreenKey.currentState as dynamic).refresh();
