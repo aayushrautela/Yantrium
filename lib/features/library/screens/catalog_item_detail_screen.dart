@@ -56,6 +56,13 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   String? _maturityRating; // Store maturity rating for hero card
   String? _maturityRatingDescriptors; // Store maturity rating descriptors
   String? _numberOfSeasons; // Store number of seasons for series
+  
+  // Play button state
+  String _playButtonText = 'Play';
+  Episode? _nextEpisode;
+  int? _nextEpisodeSeasonNumber;
+  bool _isUpcomingEpisode = false;
+  bool _isLoadingPlayButtonStatus = false;
 
   @override
   void initState() {
@@ -69,6 +76,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     _enrichItem();
     _loadCastAndCrew();
     _checkLibraryStatus();
+    _updatePlayButtonStatus();
   }
 
   Future<void> _checkLibraryStatus() async {
@@ -169,6 +177,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         setState(() {
           _enrichedItem = finalItem;
         });
+        // Update play button status after enrichment
+        _updatePlayButtonStatus();
       }
     } catch (e) {
       // Use original item if enrichment fails
@@ -197,8 +207,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         await _loadSeasonsAndEpisodes(item);
       }
       
-      // Get the first episode from season 1
-      if (_seasons.isNotEmpty) {
+      // Use next episode if available, otherwise fall back to first episode
+      if (_nextEpisode != null && _nextEpisodeSeasonNumber != null) {
+        firstEpisode = _nextEpisode;
+        firstSeasonNumber = _nextEpisodeSeasonNumber;
+      } else if (_seasons.isNotEmpty) {
         final firstSeason = _seasons.firstWhere(
           (s) => s.seasonNumber == 1,
           orElse: () => _seasons.first,
@@ -207,45 +220,28 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         if (firstSeason.episodes.isNotEmpty) {
           firstEpisode = firstSeason.episodes.first;
           firstSeasonNumber = firstSeason.seasonNumber;
-          // Format episode ID as {showId}:{season}:{episode}
-          // First, get the IMDB ID for the show
-          final imdbId = await _getImdbIdForItem(item);
-          if (imdbId != null) {
-            episodeId = '$imdbId:${firstSeason.seasonNumber}:${firstEpisode.episodeNumber}';
-            if (kDebugMode) {
-              debugPrint('Using episode ID for series: $episodeId (Season ${firstSeason.seasonNumber}, Episode ${firstEpisode.episodeNumber})');
-            }
-          } else {
-            if (kDebugMode) {
-              debugPrint('Could not get IMDB ID for series, cannot generate episode ID');
-            }
-            if (mounted) {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Cannot Play Series'),
-                  content: const Text('Unable to identify this series. Please try again.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-            }
-            return;
+        }
+      }
+      
+      if (firstEpisode != null && firstSeasonNumber != null) {
+        // Format episode ID as {showId}:{season}:{episode}
+        // First, get the IMDB ID for the show
+        final imdbId = await _getImdbIdForItem(item);
+        if (imdbId != null) {
+          episodeId = '$imdbId:$firstSeasonNumber:${firstEpisode.episodeNumber}';
+          if (kDebugMode) {
+            debugPrint('Using episode ID for series: $episodeId (Season $firstSeasonNumber, Episode ${firstEpisode.episodeNumber})');
           }
         } else {
           if (kDebugMode) {
-            debugPrint('No episodes found in first season');
+            debugPrint('Could not get IMDB ID for series, cannot generate episode ID');
           }
           if (mounted) {
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
-                title: const Text('No Episodes Available'),
-                content: const Text('No episodes were found for this series.'),
+                title: const Text('Cannot Play Series'),
+                content: const Text('Unable to identify this series. Please try again.'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -259,14 +255,14 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         }
       } else {
         if (kDebugMode) {
-          debugPrint('No seasons found for series');
+          debugPrint('No episodes found');
         }
         if (mounted) {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('No Seasons Available'),
-              content: const Text('No seasons were found for this series.'),
+              title: const Text('No Episodes Available'),
+              content: const Text('No episodes were found for this series.'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -958,14 +954,14 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                             children: [
                               PrimaryButton(
                                 onPressed: () => _handlePlayButton(),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(Icons.play_arrow, size: 24),
-                                    SizedBox(width: 10),
+                                    const SizedBox(width: 10),
                                     Text(
-                                      'Play',
-                                      style: TextStyle(fontSize: 16),
+                                      _playButtonText,
+                                      style: const TextStyle(fontSize: 16),
                                     ),
                                   ],
                                 ),
@@ -1611,6 +1607,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
               _checkSeasonScroll();
             }
           });
+          // Update play button status after loading episodes
+          _updatePlayButtonStatus();
           return;
         }
       }
@@ -1622,6 +1620,229 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       setState(() {
         _isLoadingEpisodes = false;
       });
+      // Update play button status even if no episodes were loaded
+      _updatePlayButtonStatus();
+    }
+  }
+
+  /// Update play button text and next episode info based on watch status
+  Future<void> _updatePlayButtonStatus() async {
+    if (_isLoadingPlayButtonStatus) return;
+    
+    setState(() {
+      _isLoadingPlayButtonStatus = true;
+    });
+
+    try {
+      final item = _enrichedItem ?? widget.item;
+      final database = DatabaseProvider.instance;
+      final tmdbId = IdParser.extractTmdbId(item.id)?.toString();
+      final imdbId = IdParser.isImdbId(item.id) ? item.id : null;
+
+      if (item.type == 'movie') {
+        // For movies, check watch history
+        double? progress;
+        if (imdbId != null) {
+          final history = await database.getWatchHistoryByImdbId(imdbId);
+          progress = history?.progress;
+        }
+        
+        // Also try by TMDB ID if we have it
+        if (progress == null && tmdbId != null) {
+          final allHistory = await database.getAllWatchHistory();
+          final movieHistory = allHistory.where(
+            (h) => h.type == 'movie' && h.tmdbId == tmdbId,
+          ).firstOrNull;
+          if (movieHistory != null) {
+            progress = movieHistory.progress;
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            if (progress == null || progress == 0.0) {
+              _playButtonText = 'Play';
+            } else if (progress > 0.0 && progress < 80.0) {
+              _playButtonText = 'Continue';
+            } else {
+              _playButtonText = 'Rewatch';
+            }
+            _nextEpisode = null;
+            _nextEpisodeSeasonNumber = null;
+            _isUpcomingEpisode = false;
+            _isLoadingPlayButtonStatus = false;
+          });
+        }
+      } else if (item.type == 'series') {
+        // For series, find the next episode to watch
+        if (tmdbId == null || _seasons.isEmpty) {
+          // If no seasons loaded yet, default to "Play"
+          if (mounted) {
+            setState(() {
+              _playButtonText = 'Play';
+              _nextEpisode = null;
+              _nextEpisodeSeasonNumber = null;
+              _isUpcomingEpisode = false;
+              _isLoadingPlayButtonStatus = false;
+            });
+          }
+          return;
+        }
+
+        // Get all watched episodes for this series
+        final allWatchedEpisodes = await database.getAllWatchHistory();
+        final seriesWatchedEpisodes = allWatchedEpisodes.where(
+          (item) => item.type == 'episode' && item.tmdbId == tmdbId,
+        ).toList();
+
+        // Find the highest watched episode (by season and episode number)
+        // If episode 15 is watched, we assume all episodes before it are watched
+        WatchHistoryData? highestWatchedEpisode;
+        for (final episode in seriesWatchedEpisodes) {
+          if (highestWatchedEpisode == null) {
+            highestWatchedEpisode = episode;
+          } else {
+            final existingSeason = highestWatchedEpisode.seasonNumber ?? 0;
+            final existingEpisode = highestWatchedEpisode.episodeNumber ?? 0;
+            final currentSeason = episode.seasonNumber ?? 0;
+            final currentEpisode = episode.episodeNumber ?? 0;
+            
+            if (currentSeason > existingSeason || 
+                (currentSeason == existingSeason && currentEpisode > existingEpisode)) {
+              highestWatchedEpisode = episode;
+            }
+          }
+        }
+
+        // Get all episodes in order
+        final allEpisodes = <({Episode episode, int seasonNumber})>[];
+        for (final season in _seasons) {
+          for (final episode in season.episodes) {
+            allEpisodes.add((episode: episode, seasonNumber: season.seasonNumber));
+          }
+        }
+
+        // Sort by season and episode number
+        allEpisodes.sort((a, b) {
+          if (a.seasonNumber != b.seasonNumber) {
+            return a.seasonNumber.compareTo(b.seasonNumber);
+          }
+          return a.episode.episodeNumber.compareTo(b.episode.episodeNumber);
+        });
+
+        Episode? nextEpisode;
+        int? nextSeasonNumber;
+        bool isUpcoming = false;
+        final now = DateTime.now();
+
+        if (highestWatchedEpisode != null) {
+          // We have a highest watched episode, find the next one after it
+          final highestSeason = highestWatchedEpisode.seasonNumber ?? 0;
+          final highestEpisodeNum = highestWatchedEpisode.episodeNumber ?? 0;
+          
+          // Check if highest watched episode is in progress (0-80%)
+          final highestProgress = highestWatchedEpisode.progress;
+          final isHighestInProgress = highestProgress > 0.0 && highestProgress < 80.0;
+          
+          if (isHighestInProgress) {
+            // Continue watching the highest episode
+            for (final epData in allEpisodes) {
+              if (epData.seasonNumber == highestSeason && 
+                  epData.episode.episodeNumber == highestEpisodeNum) {
+                nextEpisode = epData.episode;
+                nextSeasonNumber = epData.seasonNumber;
+                isUpcoming = false;
+                break;
+              }
+            }
+          } else {
+            // Find the next episode after the highest watched
+            for (final epData in allEpisodes) {
+              final epSeason = epData.seasonNumber;
+              final epNum = epData.episode.episodeNumber;
+              
+              // Check if this episode comes after the highest watched
+              final isAfterHighest = epSeason > highestSeason || 
+                  (epSeason == highestSeason && epNum > highestEpisodeNum);
+              
+              if (isAfterHighest) {
+                // Check if episode is released
+                bool isReleased = true;
+                if (epData.episode.airDate != null && epData.episode.airDate!.isNotEmpty) {
+                  try {
+                    final airDate = DateTime.parse(epData.episode.airDate!);
+                    isReleased = airDate.isBefore(now) || airDate.isAtSameMomentAs(now);
+                  } catch (e) {
+                    isReleased = true;
+                  }
+                }
+                
+                if (isReleased) {
+                  // Found next released episode
+                  nextEpisode = epData.episode;
+                  nextSeasonNumber = epData.seasonNumber;
+                  isUpcoming = false;
+                  break;
+                } else {
+                  // Found upcoming episode
+                  if (nextEpisode == null) {
+                    nextEpisode = epData.episode;
+                    nextSeasonNumber = epData.seasonNumber;
+                    isUpcoming = true;
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // No episodes watched, use first episode
+          if (allEpisodes.isNotEmpty) {
+            nextEpisode = allEpisodes.first.episode;
+            nextSeasonNumber = allEpisodes.first.seasonNumber;
+            isUpcoming = false;
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            if (nextEpisode == null) {
+              // No next episode found - all episodes are watched and no upcoming ones
+              if (highestWatchedEpisode != null) {
+                _playButtonText = 'Rewatch';
+              } else {
+                _playButtonText = 'Play';
+              }
+            } else {
+              if (isUpcoming) {
+                _playButtonText = 'Upcoming (S${nextSeasonNumber}:E${nextEpisode.episodeNumber})';
+              } else if (highestWatchedEpisode != null) {
+                // We have watched episodes, so show "Continue"
+                _playButtonText = 'Continue (S${nextSeasonNumber}:E${nextEpisode.episodeNumber})';
+              } else {
+                // No episodes watched, starting from first
+                _playButtonText = 'Play';
+              }
+            }
+            _nextEpisode = nextEpisode;
+            _nextEpisodeSeasonNumber = nextSeasonNumber;
+            _isUpcomingEpisode = isUpcoming;
+            _isLoadingPlayButtonStatus = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error updating play button status: $e');
+      }
+      if (mounted) {
+        setState(() {
+          _playButtonText = 'Play';
+          _nextEpisode = null;
+          _nextEpisodeSeasonNumber = null;
+          _isUpcomingEpisode = false;
+          _isLoadingPlayButtonStatus = false;
+        });
+      }
     }
   }
 
