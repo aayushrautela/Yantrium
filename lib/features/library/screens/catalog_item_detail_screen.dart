@@ -2001,7 +2001,8 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                         episode: episode,
                         seriesItem: item,
                         seasonNumber: selectedSeason.seasonNumber,
-                        onPlay: () {
+                        onPlay: () => _handleEpisodePlay(item, selectedSeason.seasonNumber, episode),
+                        onNavigate: () {
                           Navigator.of(context).push(
                             material.MaterialPageRoute(
                               builder: (context) => EpisodeDetailScreen(
@@ -2381,12 +2382,14 @@ class _EpisodeCard extends StatefulWidget {
   final CatalogItem seriesItem;
   final int seasonNumber;
   final VoidCallback onPlay;
+  final VoidCallback onNavigate;
 
   const _EpisodeCard({
     required this.episode,
     required this.seriesItem,
     required this.seasonNumber,
     required this.onPlay,
+    required this.onNavigate,
   });
 
   @override
@@ -2507,126 +2510,76 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Clickable(
-        onPressed: widget.onPlay,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            color: Theme.of(context).colorScheme.background,
-            child: ClipRect(
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Episode image with duration overlay
-                Flexible(
-                  flex: 3,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
-                    ),
-                    child: Stack(
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: AnimatedScale(
-                              scale: _isHovered ? 1.05 : 1.0,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                              child: imageUrl != null
-                                  ? Image.network(
-                                      imageUrl,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          Container(
-                                        width: double.infinity,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
-                                          borderRadius: const BorderRadius.only(
-                                            topLeft: Radius.circular(8),
-                                            topRight: Radius.circular(8),
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Text(
-                                              widget.episode.name,
-                                              textAlign: TextAlign.center,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color: Theme.of(context).colorScheme.foreground,
-                                                height: 1.2,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return Container(
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Clickable(
+              onPressed: widget.onNavigate,
+              child: Container(
+                color: Theme.of(context).colorScheme.background,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Episode image
+                    Flexible(
+                      flex: 3,
+                      child: Stack(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: ClipRect(
+                                child: AnimatedScale(
+                                  scale: _isHovered ? 1.1 : 1.0,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOut,
+                                  child: imageUrl != null
+                                      ? Image.network(
+                                          imageUrl,
+                                          fit: BoxFit.cover,
                                           width: double.infinity,
-                                          color: Theme.of(context).colorScheme.muted,
-                                          child: const Center(
-                                              child: CircularProgressIndicator()),
-                                        );
-                                      },
-                                    )
-                                  : Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(8),
-                                          topRight: Radius.circular(8),
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: Text(
-                                            widget.episode.name,
-                                            textAlign: TextAlign.center,
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Theme.of(context).colorScheme.foreground,
-                                              height: 1.2,
-                                            ),
+                                          errorBuilder: (context, error, stackTrace) =>
+                                              Container(
+                                            width: double.infinity,
+                                            color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
                                           ),
+                                        )
+                                      : Container(
+                                          width: double.infinity,
+                                          color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
                                         ),
-                                      ),
-                                    ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        // Watched tag (top left)
-                        if (_isWatched)
+                          // Watched tag
+                          if (_isWatched)
                           Positioned(
                             top: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Watched',
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
@@ -2635,20 +2588,27 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                         if (widget.episode.runtime != null)
                           Positioned(
                             bottom: 8,
-                            right: widget.episode.airDate != null ? 100 : 8,
+                            right: widget.episode.airDate != null ? 120 : 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(4),
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: Text(
                                 '${widget.episode.runtime}m',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
@@ -2659,41 +2619,54 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             bottom: 8,
                             right: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(4),
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: Text(
                                 _formatEpisodeDate(widget.episode.airDate!),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primaryForeground,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
                           ),
-                        // Play button overlay (shown on hover)
+                        // Background overlay that ignores pointer events
                         if (_isHovered)
                           Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(8),
-                                  topRight: Radius.circular(8),
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
                                 ),
                               ),
-                              child: Center(
+                            ),
+                          ),
+                        // Play button that captures clicks
+                        if (_isHovered)
+                          Center(
+                            child: AbsorbPointer(
+                              absorbing: false,
+                              child: Clickable(
+                                onPressed: widget.onPlay,
                                 child: Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.primary,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
+                                  child: const Icon(
                                     Icons.play_arrow,
                                     color: Colors.white,
                                     size: 40,
@@ -2702,62 +2675,73 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Title and description with background
-                Flexible(
-                  flex: 2,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(15),
-                    color: Theme.of(context).colorScheme.muted,
-                    child: ClipRect(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          // Episode title
-                          Text(
-                            '${widget.episode.episodeNumber}. ${widget.episode.name}',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-
-                          // Episode description
-                          const SizedBox(height: 6),
-                          Flexible(
-                            child: Text(
-                              _getEpisodeDescription(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .foreground
-                                    .withOpacity(0.7),
-                                height: 1.4,
-                              ),
-                              maxLines: 5,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
                         ],
                       ),
                     ),
-                  ),
+                    // Title and description with background
+                    Flexible(
+                      flex: 2,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(15),
+                        color: Theme.of(context).colorScheme.muted,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            // Episode title
+                            Text(
+                              '${widget.episode.episodeNumber}. ${widget.episode.name}',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            // Episode description
+                            const SizedBox(height: 6),
+                            Expanded(
+                              child: Text(
+                                _getEpisodeDescription(),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .foreground
+                                      .withOpacity(0.7),
+                                  height: 1.4,
+                                ),
+                                maxLines: 5,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-        ),
+          // Border overlay - doesn't change card dimensions
+          if (_isHovered)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
