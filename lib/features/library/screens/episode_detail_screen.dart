@@ -89,6 +89,40 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     );
   }
 
+  /// Scroll to the current episode in the episodes list
+  void _scrollToCurrentEpisode() {
+    if (!_episodesScrollController.hasClients || _seasons.isEmpty) return;
+
+    // Combine all episodes from all seasons into a single list
+    final allEpisodes = <({Episode episode, int seasonNumber})>[];
+    for (final season in _seasons) {
+      for (final episode in season.episodes) {
+        allEpisodes.add((episode: episode, seasonNumber: season.seasonNumber));
+      }
+    }
+
+    // Find the index of the current episode
+    final currentIndex = allEpisodes.indexWhere(
+      (e) => e.episode.episodeNumber == _currentEpisode.episodeNumber &&
+            e.seasonNumber == _selectedSeasonNumber,
+    );
+
+    if (currentIndex >= 0) {
+      // Calculate scroll position: card width (400) + spacing (24) * index
+      // Center the episode in the viewport
+      final cardWidth = 400.0;
+      final spacing = 24.0;
+      final targetOffset = (currentIndex * (cardWidth + spacing)) - 
+                          ((_episodesScrollController.position.viewportDimension - cardWidth) / 2);
+      
+      _episodesScrollController.animateTo(
+        targetOffset.clamp(0.0, _episodesScrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 500),
+        curve: material.Curves.easeInOut,
+      );
+    }
+  }
+
   void _checkSeasonScroll() {
     if (!_seasonListScrollController.hasClients) return;
     
@@ -292,15 +326,16 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
             }
             _isLoadingEpisodes = false;
           });
+          
           // Check scroll state and scroll to selected season after a frame to ensure layout is complete
+          // Also scroll to current episode after episodes are loaded
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _seasonListScrollController.hasClients) {
               _checkSeasonScroll();
-              // Scroll to the selected season
-              _scrollToSelectedSeason();
             }
+            // Scroll to current episode after episodes are loaded
+            _scrollToCurrentEpisode();
           });
-          return;
         }
       }
     } catch (e) {
@@ -657,6 +692,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         ),
       );
     }
+
+    // Scroll to current episode when episodes are already loaded and tab is displayed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentEpisode();
+    });
 
     // Combine all episodes from all seasons into a single list
     final allEpisodes = <({Episode episode, int seasonNumber})>[];
