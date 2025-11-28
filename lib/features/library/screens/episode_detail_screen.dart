@@ -41,6 +41,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   late ScrollController _mainScrollController;
   late ScrollController _episodesScrollController;
   bool _showSeasonScrollArrow = false;
+  late Episode _currentEpisode; // Current episode with potentially enriched data
 
   @override
   void initState() {
@@ -52,6 +53,14 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     _mainScrollController = ScrollController();
     _episodesScrollController = ScrollController();
     _selectedSeasonNumber = widget.seasonNumber;
+    _currentEpisode = widget.episode;
+    
+    // If the current episode is missing details (like airDate, overview, stillPath), fetch them immediately
+    // This is faster than waiting for all seasons to load
+    if (_currentEpisode.airDate == null || _currentEpisode.stillPath == null || _currentEpisode.overview == null || _currentEpisode.runtime == null) {
+      _fetchCurrentEpisodeDetails();
+    }
+    
     _loadSeasonsAndEpisodes();
   }
 
@@ -111,6 +120,47 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       duration: const Duration(milliseconds: 300),
       curve: material.Curves.easeInOut,
     );
+  }
+
+  Future<void> _fetchCurrentEpisodeDetails() async {
+    try {
+      final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
+      int? finalTmdbId = tmdbId;
+
+      if (finalTmdbId == null && IdParser.isImdbId(widget.seriesItem.id)) {
+        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.seriesItem.id);
+      }
+
+      if (finalTmdbId != null) {
+        // Fetch just the current season to get the episode details quickly
+        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, widget.seasonNumber);
+        
+        if (seasonData != null && seasonData['episodes'] != null && mounted) {
+          final episodes = seasonData['episodes'] as List<dynamic>;
+          final episodeData = episodes.firstWhere(
+            (e) => e['episode_number'] == widget.episode.episodeNumber,
+            orElse: () => null,
+          );
+
+          if (episodeData != null && mounted) {
+            setState(() {
+              _currentEpisode = Episode.fromJson(episodeData);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error fetching current episode details: $e');
+      }
+    }
+  }
+
+  /// Format episode air date for display
+  String _formatEpisodeDate(String airDate) {
+    // TMDB dates are typically in YYYY-MM-DD format, return as is
+    // If we need to format differently, parse and reformat here
+    return airDate;
   }
 
   Future<void> _loadSeasonsAndEpisodes() async {
@@ -686,8 +736,8 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   Widget build(BuildContext context) {
     // Get episode image URL, fallback to show backdrop
     String? backdropUrl;
-    if (widget.episode.stillPath != null) {
-      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'original');
+    if (_currentEpisode.stillPath != null) {
+      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(_currentEpisode.stillPath, size: 'original');
     } else if (widget.seriesItem.background != null) {
       backdropUrl = widget.seriesItem.background;
     }
@@ -829,7 +879,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'S${widget.seasonNumber.toString().padLeft(2, '0')}E${widget.episode.episodeNumber.toString().padLeft(2, '0')}',
+                                        'S${widget.seasonNumber.toString().padLeft(2, '0')}E${_currentEpisode.episodeNumber.toString().padLeft(2, '0')}',
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w500,
@@ -838,7 +888,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        widget.episode.name,
+                                        _currentEpisode.name,
                                         style: const TextStyle(
                                           fontSize: 32,
                                           fontWeight: FontWeight.w600,
@@ -851,12 +901,41 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
 
                                 const SizedBox(height: 20),
 
+                                // Metadata (Duration and Release Date)
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 10,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    // Duration
+                                    if (_currentEpisode.runtime != null)
+                                      Text(
+                                        '${_currentEpisode.runtime}m',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.white.withOpacity(0.7),
+                                        ),
+                                      ),
+                                    // Release Date
+                                    if (_currentEpisode.airDate != null && _currentEpisode.airDate!.isNotEmpty)
+                                      Text(
+                                        _formatEpisodeDate(_currentEpisode.airDate!),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.white.withOpacity(0.7),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 20),
+
                                 // Description
-                                if (widget.episode.overview != null)
+                                if (_currentEpisode.overview != null && _currentEpisode.overview!.isNotEmpty)
                                   SizedBox(
                                     width: 600,
                                     child: Text(
-                                      widget.episode.overview!,
+                                      _currentEpisode.overview!,
                                       style: const TextStyle(
                                         fontSize: 16,
                                         height: 1.5,
