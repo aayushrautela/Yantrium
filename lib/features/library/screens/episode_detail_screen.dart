@@ -1,5 +1,7 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:flutter/material.dart' as material;
+import 'package:flutter/services.dart'; // For SystemMouseCursors
+import 'package:flutter/foundation.dart'; // For kDebugMode
 import '../models/catalog_item.dart';
 import '../models/episode.dart' show Episode, Season;
 import '../models/stream_info.dart';
@@ -12,7 +14,6 @@ import '../../../core/services/id_parser.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../logic/stream_service.dart';
-import 'package:flutter/foundation.dart';
 
 /// Detail screen for an episode
 class EpisodeDetailScreen extends StatefulWidget {
@@ -38,58 +39,20 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   bool _isLoadingEpisodes = false;
   late ScrollController _seasonListScrollController;
   late ScrollController _mainScrollController;
+  late ScrollController _episodesScrollController;
   bool _showSeasonScrollArrow = false;
-  late Episode _currentEpisode;
 
   @override
   void initState() {
     super.initState();
-    _currentEpisode = widget.episode;
     final database = DatabaseProvider.instance;
     _streamService = StreamService(database);
     _seasonListScrollController = ScrollController();
     _seasonListScrollController.addListener(_checkSeasonScroll);
     _mainScrollController = ScrollController();
+    _episodesScrollController = ScrollController();
     _selectedSeasonNumber = widget.seasonNumber;
     _loadSeasonsAndEpisodes();
-    
-    // If the current episode is missing details (like airDate), fetch them immediately
-    // This is faster than waiting for all seasons to load
-    if (_currentEpisode.airDate == null || _currentEpisode.stillPath == null || _currentEpisode.overview == null) {
-      _fetchCurrentEpisodeDetails();
-    }
-  }
-
-  Future<void> _fetchCurrentEpisodeDetails() async {
-    try {
-      final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
-      int? finalTmdbId = tmdbId;
-
-      if (finalTmdbId == null && IdParser.isImdbId(widget.seriesItem.id)) {
-        finalTmdbId = await ServiceLocator.instance.tmdbMetadataService.getTmdbIdFromImdb(widget.seriesItem.id);
-      }
-
-      if (finalTmdbId != null) {
-        // Fetch just the current season to get the episode details quickly
-        final seasonData = await ServiceLocator.instance.tmdbSearchService.getSeasonEpisodes(finalTmdbId, widget.seasonNumber);
-        
-        if (seasonData != null && seasonData['episodes'] != null && mounted) {
-          final episodes = seasonData['episodes'] as List<dynamic>;
-          final episodeData = episodes.firstWhere(
-            (e) => e['episode_number'] == widget.episode.episodeNumber,
-            orElse: () => null,
-          );
-
-          if (episodeData != null) {
-            setState(() {
-              _currentEpisode = Episode.fromJson(episodeData);
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching current episode details: $e');
-    }
   }
 
   @override
@@ -97,7 +60,24 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     _seasonListScrollController.removeListener(_checkSeasonScroll);
     _seasonListScrollController.dispose();
     _mainScrollController.dispose();
+    _episodesScrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollEpisodesLeft() {
+    _episodesScrollController.animateTo(
+      _episodesScrollController.offset - 480, // 400px card + 24px spacing + some buffer
+      duration: const Duration(milliseconds: 300),
+      curve: material.Curves.easeInOut,
+    );
+  }
+
+  void _scrollEpisodesRight() {
+    _episodesScrollController.animateTo(
+      _episodesScrollController.offset + 480, // 400px card + 24px spacing + some buffer
+      duration: const Duration(milliseconds: 300),
+      curve: material.Curves.easeInOut,
+    );
   }
 
   void _checkSeasonScroll() {
@@ -183,23 +163,6 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         if (mounted) {
           setState(() {
             _seasons = seasons;
-            
-            // Find the current episode in the loaded data and update it
-            // This ensures we have full metadata (air date, runtime, etc.)
-            // even if we navigated with a minimal episode object
-            for (final season in seasons) {
-              if (season.seasonNumber == widget.seasonNumber) {
-                final foundEpisode = season.episodes.firstWhere(
-                  (e) => e.episodeNumber == widget.episode.episodeNumber,
-                  orElse: () => widget.episode,
-                );
-                if (foundEpisode != widget.episode) {
-                  _currentEpisode = foundEpisode;
-                }
-                break;
-              }
-            }
-
             // Ensure the current episode's season is selected
             if (_seasons.isNotEmpty) {
               // Check if the season exists in the loaded seasons
@@ -316,7 +279,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         final selectedStream = await showDialog<StreamInfo>(
           context: context,
           builder: (context) => _StreamSelectionDialog(
-            title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${_currentEpisode.episodeNumber}',
+            title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${widget.episode.episodeNumber}',
             streams: streams,
           ),
         );
@@ -334,13 +297,13 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
               material.MaterialPageRoute(
                 builder: (context) => VideoPlayerScreen(
                   streamUrl: selectedStream.url,
-                  title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${_currentEpisode.episodeNumber}',
+                  title: '${widget.seriesItem.name} - S${widget.seasonNumber}E${widget.episode.episodeNumber}',
                   subtitles: selectedStream.subtitles?.map((s) => s.url).toList(),
                   logoUrl: widget.seriesItem.logo,
-                  description: _currentEpisode.overview ?? widget.seriesItem.description,
-                  episodeName: _currentEpisode.name,
+                  description: widget.episode.overview ?? widget.seriesItem.description,
+                  episodeName: widget.episode.name,
                   seasonNumber: widget.seasonNumber,
-                  episodeNumber: _currentEpisode.episodeNumber,
+                  episodeNumber: widget.episode.episodeNumber,
                   isMovie: false,
                 ),
               ),
@@ -579,196 +542,138 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       );
     }
 
-    final selectedSeason = _seasons.firstWhere(
-      (s) => s.seasonNumber == _selectedSeasonNumber,
-      orElse: () => _seasons.first,
-    );
+    // Combine all episodes from all seasons into a single list
+    final allEpisodes = <({Episode episode, int seasonNumber})>[];
+    for (final season in _seasons) {
+      for (final episode in season.episodes) {
+        allEpisodes.add((episode: episode, seasonNumber: season.seasonNumber));
+      }
+    }
 
-    // Horizontal layout: seasons list on left, episodes on right
-    return Row(
+    // Calculate episode card height based on aspect ratio 1.2
+    // Card width is 400px (similar to continue watching cards)
+    final cardWidth = 400.0;
+    final cardHeight = cardWidth / 1.2;
+    // Image takes 3/5 of the card height (flex: 3 out of total flex: 5)
+    final imageHeight = cardHeight * (3 / 5);
+    final imageCenter = imageHeight / 2;
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Seasons list
-        SizedBox(
-          width: 200,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        Padding(
+          padding: AppConstants.sectionHeaderPadding,
+          child: Row(
             children: [
-              // Season header aligned with episode header
+              const Icon(Icons.play_circle_outline, size: 20),
+              const SizedBox(width: 8),
+              Text('Episodes').h4(),
+              const SizedBox(width: 12),
               Text(
-                'Season',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Seasons list
-              Container(
-                constraints: const BoxConstraints(maxHeight: 600),
-                child: Stack(
-                  children: [
-                    ListView.builder(
-                      controller: _seasonListScrollController,
-                      shrinkWrap: true,
-                      itemCount: _seasons.length,
-                      itemBuilder: (context, index) {
-                        final season = _seasons[index];
-                        final isSelected = season.seasonNumber == _selectedSeasonNumber;
-
-                        return Clickable(
-                          onPressed: () {
-                            setState(() {
-                              _selectedSeasonNumber = season.seasonNumber;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .foreground
-                                      .withOpacity(0.1)
-                                  : Colors.transparent,
-                              border: Border(
-                                left: BorderSide(
-                                  color: isSelected ? Colors.yellow : Colors.transparent,
-                                  width: 3,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    season.name,
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.yellow
-                                          : Theme.of(context).colorScheme.foreground,
-                                      fontWeight:
-                                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                                    ),
-                                  ),
-                                ),
-                                if (isSelected)
-                                  const Icon(
-                                    material.Icons.arrow_forward_ios,
-                                    size: 12,
-                                    color: Colors.yellow,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    // Scroll indicator arrow at the bottom
-                    if (_showSeasonScrollArrow)
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Theme.of(context).colorScheme.background.withOpacity(0.8),
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              material.Icons.keyboard_arrow_down,
-                              color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                '${allEpisodes.length} Episodes',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .foreground
+                      .withOpacity(0.7),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 32),
-        // Episodes content
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+        SizedBox(
+          height: cardHeight,
+          child: Stack(
             children: [
-              // Season header
-              Row(
-                children: [
-                  Text(
-                    selectedSeason.name,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${selectedSeason.episodes.length} Episodes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .foreground
-                          .withOpacity(0.7),
-                    ),
-                  ),
-                ],
+              Padding(
+                padding: EdgeInsets.only(
+                  left: AppConstants.horizontalMargin,
+                  right: AppConstants.horizontalMargin,
+                ),
+                child: ListView.builder(
+                  controller: _episodesScrollController,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: allEpisodes.length,
+                  itemBuilder: (context, index) {
+                    final episodeData = allEpisodes[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 24),
+                      child: SizedBox(
+                        width: cardWidth,
+                        child: _EpisodeCard(
+                          episode: episodeData.episode,
+                          seriesItem: widget.seriesItem,
+                          seasonNumber: episodeData.seasonNumber,
+                          onPlay: () => _handleEpisodePlay(widget.seriesItem, episodeData.seasonNumber, episodeData.episode),
+                          onNavigate: () {
+                            Navigator.of(context).pushReplacement(
+                              material.MaterialPageRoute(
+                                builder: (context) => EpisodeDetailScreen(
+                                  seriesItem: widget.seriesItem,
+                                  episode: episodeData.episode,
+                                  seasonNumber: episodeData.seasonNumber,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-
-              const SizedBox(height: 24),
-
-              // Episodes grid
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final screenWidth = constraints.maxWidth;
-                  int crossAxisCount;
-                  if (screenWidth > 1600) {
-                    crossAxisCount = 4;
-                  } else if (screenWidth > 1200) {
-                    crossAxisCount = 4;
-                  } else if (screenWidth > 800) {
-                    crossAxisCount = 3;
-                  } else {
-                    crossAxisCount = 2;
-                  }
-
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 40),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 1.2,
+              // Left button - centered relative to image
+              Positioned(
+                left: AppConstants.horizontalMargin - 40,
+                top: imageCenter - 20, // Center of image minus half button height
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Clickable(
+                    onPressed: _scrollEpisodesLeft,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.border,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.chevron_left,
+                        color: Theme.of(context).colorScheme.foreground,
+                      ),
                     ),
-                    itemCount: selectedSeason.episodes.length,
-                    itemBuilder: (context, index) {
-                      final episode = selectedSeason.episodes[index];
-                      return _EpisodeCard(
-                        episode: episode,
-                        seriesItem: widget.seriesItem,
-                        seasonNumber: selectedSeason.seasonNumber,
-                        onPlay: () => _handleEpisodePlay(widget.seriesItem, selectedSeason.seasonNumber, episode),
-                      );
-                    },
-                  );
-                },
+                  ),
+                ),
+              ),
+              // Right button - centered relative to image
+              Positioned(
+                right: AppConstants.horizontalMargin - 40,
+                top: imageCenter - 20, // Center of image minus half button height
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Clickable(
+                    onPressed: _scrollEpisodesRight,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.border,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(context).colorScheme.foreground,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -781,260 +686,266 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   Widget build(BuildContext context) {
     // Get episode image URL, fallback to show backdrop
     String? backdropUrl;
-    if (_currentEpisode.stillPath != null) {
-      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(_currentEpisode.stillPath, size: 'original');
+    if (widget.episode.stillPath != null) {
+      backdropUrl = ServiceLocator.instance.tmdbEnrichmentService.getImageUrl(widget.episode.stillPath, size: 'original');
     } else if (widget.seriesItem.background != null) {
       backdropUrl = widget.seriesItem.background;
     }
 
     return Container(
-        color: Theme.of(context).colorScheme.background,
-        child: Stack(
-          children: [
-            // Scrollable content
-            Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: _mainScrollController,
-                    child: Stack(
-                  children: [
-                    // Backdrop image in the top right, scaled to 80%
-                    if (backdropUrl != null)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        width: MediaQuery.of(context).size.width * 0.8,
-                        height: MediaQuery.of(context).size.height * 0.8,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              backdropUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                color: Theme.of(context).colorScheme.muted,
-                              ),
-                            ),
-                            // Gradient to blend left edge (vertical fade from left to right)
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    Theme.of(context).colorScheme.background,
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .background
-                                        .withOpacity(0.6),
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .background
-                                        .withOpacity(0.2),
-                                    Colors.transparent,
-                                  ],
-                                  stops: const [0.0, 0.15, 0.35, 1.0],
+      color: Theme.of(context).colorScheme.background,
+      child: Stack(
+        children: [
+          // Scrollable content
+          Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _mainScrollController,
+                  child: Stack(
+                    children: [
+                      // 1. Backdrop image in the top right, scaled to 80%
+                      if (backdropUrl != null)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          width: MediaQuery.of(context).size.width * 0.8,
+                          height: MediaQuery.of(context).size.height * 0.8,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                backdropUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: Theme.of(context).colorScheme.muted,
                                 ),
                               ),
-                            ),
-                          ],
+                              // Gradient to blend left edge (vertical fade from left to right)
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      Theme.of(context).colorScheme.background,
+                                      Theme.of(context)
+                                          .colorScheme
+                                          .background
+                                          .withOpacity(0.6),
+                                      Theme.of(context)
+                                          .colorScheme
+                                          .background
+                                          .withOpacity(0.2),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.0, 0.15, 0.35, 1.0],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
 
-                    // Extended bottom gradient positioned outside backdrop (85% height for 5% buffer)
-                    if (backdropUrl != null)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        width: MediaQuery.of(context).size.width * 0.8,
-                        height: MediaQuery.of(context).size.height * 0.85,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Theme.of(context).colorScheme.background,
-                                Theme.of(context).colorScheme.background,
-                                Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                Theme.of(context).colorScheme.background.withOpacity(0.7),
-                                Theme.of(context).colorScheme.background.withOpacity(0.5),
-                                Theme.of(context).colorScheme.background.withOpacity(0.1),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85],
+                      // 2. Extended bottom gradient positioned outside backdrop
+                      if (backdropUrl != null)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          width: MediaQuery.of(context).size.width * 0.8,
+                          height: MediaQuery.of(context).size.height * 0.85,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background,
+                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.7),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
+                                  Theme.of(context).colorScheme.background.withOpacity(0.1),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85],
+                              ),
                             ),
                           ),
                         ),
-                      ),
 
-                    // Content
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: AppConstants.horizontalMargin,
-                        right: AppConstants.horizontalMargin,
-                        top: 120,
-                        bottom: 160,
-                      ),
-                      child: Column(
+                      // 3. Main Content (Text Info + Episodes List)
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Logo
-                          if (widget.seriesItem.logo != null && widget.seriesItem.logo!.isNotEmpty)
-                            SizedBox(
-                              width: 600, // Max width constraint
-                              height: 250, // Max height constraint
-                              child: Image.network(
-                                widget.seriesItem.logo!,
-                                fit: BoxFit.contain,
-                                alignment: Alignment.centerLeft,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Text(
+                          Padding(
+                            padding: EdgeInsets.only(
+                              left: AppConstants.horizontalMargin,
+                              right: AppConstants.horizontalMargin,
+                              top: 120,
+                              bottom: 60,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Logo
+                                if (widget.seriesItem.logo != null && widget.seriesItem.logo!.isNotEmpty)
+                                  SizedBox(
+                                    width: 600,
+                                    height: 250,
+                                    child: Image.network(
+                                      widget.seriesItem.logo!,
+                                      fit: BoxFit.contain,
+                                      alignment: Alignment.centerLeft,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Text(
+                                          widget.seriesItem.name.toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 60,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.yellow,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                else
+                                  Text(
                                     widget.seriesItem.name.toUpperCase(),
                                     style: const TextStyle(
                                       fontSize: 60,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.yellow,
                                     ),
-                                  );
-                                },
-                              ),
-                            )
-                          else
-                            Text(
-                              widget.seriesItem.name.toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 60,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.yellow,
-                              ),
-                            ),
+                                  ),
 
-                          const SizedBox(height: 20),
+                                const SizedBox(height: 20),
 
-                          // Season and episode number with episode name
-                          SizedBox(
-                            width: 600,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'S${widget.seasonNumber.toString().padLeft(2, '0')}E${_currentEpisode.episodeNumber.toString().padLeft(2, '0')}',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white.withOpacity(0.7),
+                                // Season and episode number with episode name
+                                SizedBox(
+                                  width: 600,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'S${widget.seasonNumber.toString().padLeft(2, '0')}E${widget.episode.episodeNumber.toString().padLeft(2, '0')}',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white.withOpacity(0.7),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        widget.episode.name,
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _currentEpisode.name,
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+
+                                const SizedBox(height: 20),
+
+                                // Description
+                                if (widget.episode.overview != null)
+                                  SizedBox(
+                                    width: 600,
+                                    child: Text(
+                                      widget.episode.overview!,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        height: 1.5,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ),
+
+                                const SizedBox(height: 28),
+
+                                // Action Buttons
+                                Row(
+                                  children: [
+                                    PrimaryButton(
+                                      onPressed: () => _handlePlayButton(),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(material.Icons.play_arrow, size: 24),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'Play',
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    SecondaryButton(
+                                      onPressed: () {},
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(material.Icons.add, size: 24),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'My List',
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
 
-                          const SizedBox(height: 20),
-
-                          // Description
-                          if (_currentEpisode.overview != null)
-                            SizedBox(
-                              width: 600,
-                              child: Text(
-                                _currentEpisode.overview!,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.5,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-
-                          const SizedBox(height: 28),
-
-                          // Action Buttons
-                          Row(
-                            children: [
-                              PrimaryButton(
-                                onPressed: () => _handlePlayButton(),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(material.Icons.play_arrow, size: 24),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'Play',
-                                      style: TextStyle(fontSize: 16),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              SecondaryButton(
-                                onPressed: () {},
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(material.Icons.add, size: 24),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'My List',
-                                      style: TextStyle(fontSize: 16),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 40),
-
                           // Episodes list
                           _buildEpisodesContent(),
+                          
+                          const SizedBox(height: 50),
                         ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
-            ),
-            // Back button overlay - placed last so it's rendered on top
-            BackButtonOverlay(
-              onBack: () {
-                final navigator = Navigator.of(context);
-                if (navigator.canPop()) {
-                  navigator.pop();
-                }
-              },
-            ),
-          ],
-        ),
+            ],
+          ),
+          // Back button overlay - placed last so it's rendered on top
+          BackButtonOverlay(
+            onBack: () {
+              final navigator = Navigator.of(context);
+              if (navigator.canPop()) {
+                navigator.pop();
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Import EpisodeCard from catalog_item_detail_screen
-// We'll need to copy it or import it
+// Episode card widget for horizontal scrolling list
 class _EpisodeCard extends StatefulWidget {
   final Episode episode;
   final CatalogItem seriesItem;
   final int seasonNumber;
   final VoidCallback onPlay;
+  final VoidCallback onNavigate;
 
   const _EpisodeCard({
     required this.episode,
     required this.seriesItem,
     required this.seasonNumber,
     required this.onPlay,
+    required this.onNavigate,
   });
 
   @override
@@ -1045,67 +956,27 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   bool _isHovered = false;
   bool _isWatched = false;
   late final AppDatabase _database;
-  late Episode _currentEpisode;
 
   @override
   void initState() {
     super.initState();
     _database = DatabaseProvider.instance;
-    _currentEpisode = widget.episode;
     _checkWatchedStatus();
   }
 
-  @override
-  void didUpdateWidget(_EpisodeCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.episode.episodeNumber != widget.episode.episodeNumber || oldWidget.seasonNumber != widget.seasonNumber) {
-      _currentEpisode = widget.episode;
-      _checkWatchedStatus();
-    } else if (oldWidget.seriesItem.id != widget.seriesItem.id) {
-      _checkWatchedStatus();
-    }
-  }
-
   Future<void> _checkWatchedStatus() async {
-    if (kDebugMode) {
-      debugPrint('_EpisodeCard: Checking watched status for episode');
-      debugPrint('  Series ID: ${widget.seriesItem.id}');
-      debugPrint('  Season: ${widget.seasonNumber}');
-      debugPrint('  Episode: ${widget.episode.episodeNumber}');
-    }
-    
     final tmdbId = IdParser.extractTmdbId(widget.seriesItem.id);
-    if (kDebugMode) {
-      debugPrint('  Extracted TMDB ID: $tmdbId');
-    }
-    
     if (tmdbId != null) {
       final tmdbIdStr = tmdbId.toString();
-      if (kDebugMode) {
-        debugPrint('  Querying database for: tmdbId=$tmdbIdStr, season=${widget.seasonNumber}, episode=${widget.episode.episodeNumber}');
-      }
-      
       final isWatched = await _database.isEpisodeWatched(
         tmdbIdStr,
         widget.seasonNumber,
         widget.episode.episodeNumber,
       );
-      
-      if (kDebugMode) {
-        debugPrint('  Is watched: $isWatched');
-      }
-      
       if (mounted) {
         setState(() {
           _isWatched = isWatched;
         });
-        if (kDebugMode) {
-          debugPrint('  State updated: _isWatched = $_isWatched');
-        }
-      }
-    } else {
-      if (kDebugMode) {
-        debugPrint('  No TMDB ID found, cannot check watched status');
       }
     }
   }
@@ -1119,73 +990,62 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Clickable(
-        onPressed: widget.onPlay,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: _isHovered
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 3,
+                )
+              : null,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Container(
-            color: Theme.of(context).colorScheme.background,
-            child: ClipRect(
+          child: Clickable(
+            onPressed: widget.onNavigate,
+            child: Container(
+              color: Theme.of(context).colorScheme.background,
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Episode image with duration overlay
-                Flexible(
-                  flex: 3,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
-                    ),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Episode image
+                  Flexible(
+                    flex: 3,
                     child: Stack(
-                      fit: StackFit.expand,
                       children: [
-                        if (imageUrl != null)
-                          Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: Theme.of(context).colorScheme.muted,
-                            ),
-                          )
-                        else
-                          Container(
-                            color: Theme.of(context).colorScheme.muted,
-                          ),
-                        // Play button overlay (shown on hover)
-                        AnimatedOpacity(
-                          opacity: _isHovered ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 200),
-                          child: Container(
-                            color: material.Colors.black.withOpacity(0.5),
-                            child: Center(
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
-                                ),
-                                child: Icon(
-                                  material.Icons.play_arrow,
-                                  size: 32,
-                                  color: Theme.of(context).colorScheme.primaryForeground,
-                                ),
-                              ),
-                            ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: imageUrl != null
+                                ? Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Container(
+                                      width: double.infinity,
+                                      color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                    ),
+                                  )
+                                : Container(
+                                    width: double.infinity,
+                                    color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                  ),
                           ),
                         ),
-                        // Watched tag (top left)
+                        // Watched tag
                         if (_isWatched)
                           Positioned(
                             top: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: material.Colors.black.withOpacity(0.8),
+                                color: Colors.black.withOpacity(0.8),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Text(
@@ -1198,44 +1058,32 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                               ),
                             ),
                           ),
-                        // Runtime overlay
-                        if (_currentEpisode.runtime != null)
-                          Positioned(
-                            bottom: 8,
-                            right: _currentEpisode.airDate != null ? 100 : 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: material.Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '${_currentEpisode.runtime} min',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Date overlay (bottom right)
-                        if (_currentEpisode.airDate != null)
-                          Positioned(
-                            bottom: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: material.Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _currentEpisode.airDate!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                        // Play button overlay (shown on hover) - only play button opens streams
+                        if (_isHovered)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {}, // Stop propagation
+                              child: Clickable(
+                                onPressed: widget.onPlay,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.play_arrow,
+                                        color: Colors.white,
+                                        size: 40,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -1243,52 +1091,60 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                       ],
                     ),
                   ),
-                ),
-                  // Episode info
+                  // Title and description
                   Flexible(
                     flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(15),
+                      color: Theme.of(context).colorScheme.muted,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize: MainAxisSize.max,
                         children: [
+                          // Episode title
                           Text(
-                            '${_currentEpisode.episodeNumber}. ${_currentEpisode.name}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            '${widget.episode.episodeNumber}. ${widget.episode.name}',
                             style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          if (_currentEpisode.overview != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              _currentEpisode.overview!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                          // Episode description
+                          const SizedBox(height: 6),
+                          Expanded(
+                            child: Text(
+                              widget.episode.overview ?? '',
                               style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                                fontSize: 14,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .foreground
+                                    .withOpacity(0.7),
+                                height: 1.4,
                               ),
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
 }
 
+/// Simple dialog to select a stream
 class _StreamSelectionDialog extends StatelessWidget {
   final String title;
   final List<StreamInfo> streams;
@@ -1298,31 +1154,204 @@ class _StreamSelectionDialog extends StatelessWidget {
     required this.streams,
   });
 
+  String _getStreamDisplayName(StreamInfo stream) {
+    // If title looks like a detailed description (contains newlines or is long),
+    // use it directly as addons like Torrentio provide nicely formatted descriptions
+    if (stream.title != null && stream.title!.isNotEmpty) {
+      final title = stream.title!.trim();
+      // Check if title contains newlines or looks like a full description
+      if (title.contains('\n') || title.length > 50) {
+        return title.replaceAll('\n', ' '); // Replace newlines with spaces for single line display
+      }
+    }
+
+    // Fall back to reconstructing from individual fields for simple titles
+    final parts = <String>[];
+    
+    if (stream.name != null && stream.name!.isNotEmpty) {
+      parts.add(stream.name!);
+    } else if (stream.title != null && stream.title!.isNotEmpty) {
+      parts.add(stream.title!);
+    }
+    
+    if (stream.quality != null && stream.quality!.isNotEmpty) {
+      parts.add(stream.quality!);
+    }
+    
+    if (stream.addonName != null && stream.addonName!.isNotEmpty) {
+      parts.add('(${stream.addonName})');
+    }
+    
+    return parts.isNotEmpty ? parts.join(' \u2022 ') : 'Stream';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return material.AlertDialog(
-      title: Text(title),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: streams.length,
-          itemBuilder: (context, index) {
-            final stream = streams[index];
-            return material.ListTile(
-              title: Text(stream.quality ?? 'Unknown Quality'),
-              subtitle: Text(stream.addonName ?? stream.addonId ?? 'Unknown Addon'),
-              onTap: () => Navigator.of(context).pop(stream),
-            );
-          },
+    return material.Dialog(
+      child: material.Container(
+          width: 500,
+          constraints: const material.BoxConstraints(maxHeight: 600),
+          padding: const material.EdgeInsets.all(24),
+          child: material.Column(
+            mainAxisSize: material.MainAxisSize.min,
+            crossAxisAlignment: material.CrossAxisAlignment.start,
+            children: [
+              // Header
+              material.Row(
+                children: [
+                  material.Expanded(
+                    child: Text(title).h4(),
+                  ),
+                  material.IconButton(
+                    icon: const material.Icon(material.Icons.close),
+                    onPressed: () => material.Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            const material.SizedBox(height: 8),
+            Text('${streams.length} stream${streams.length != 1 ? 's' : ''} available').muted(),
+            const material.SizedBox(height: 24),
+            
+            // Stream list
+            material.Flexible(
+              child: streams.isEmpty
+                  ? material.Center(
+                      child: material.Column(
+                        mainAxisSize: material.MainAxisSize.min,
+                        children: [
+                          material.Icon(
+                            material.Icons.video_library_outlined,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.mutedForeground,
+                          ),
+                          const material.SizedBox(height: 16),
+                          const Text('No streams available').muted(),
+                        ],
+                      ),
+                    )
+                  : material.ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: streams.length,
+                      itemBuilder: (context, index) {
+                        final stream = streams[index];
+                        return _StreamItem(
+                          stream: stream,
+                          displayName: _getStreamDisplayName(stream),
+                          onTap: () => material.Navigator.of(context).pop(stream),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+    );
+  }
+}
+
+class _StreamItem extends StatefulWidget {
+  final StreamInfo stream;
+  final String displayName;
+  final VoidCallback onTap;
+
+  const _StreamItem({
+    required this.stream,
+    required this.displayName,
+    required this.onTap,
+  });
+
+  @override
+  State<_StreamItem> createState() => _StreamItemState();
+}
+
+class _StreamItemState extends State<_StreamItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Clickable(
+        onPressed: widget.onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? Theme.of(context).colorScheme.muted
+                : Theme.of(context).colorScheme.background,
+            border: Border.all(
+              color: _isHovered
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.border,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              // Play icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  Icons.play_arrow,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Stream info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.displayName).semiBold(),
+                    if (widget.stream.description != null &&
+                        widget.stream.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.stream.description!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ).muted().small(),
+                    ],
+                  ],
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Quality badge
+              if (widget.stream.quality != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.muted,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.border,
+                    ),
+                  ),
+                  child: Text(
+                    widget.stream.quality!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
