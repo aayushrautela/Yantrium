@@ -553,10 +553,10 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
         // Calculate actual card width based on available space
         final actualCardWidth = ((availableWidth - (crossAxisCount - 1) * spacing) / crossAxisCount).clamp(minCardWidth, maxCardWidth);
         
-        // Calculate aspect ratio: width / (image height + spacing + text height)
-        // Image height = cardWidth * 1.5 (2:3 ratio), text ~42px, spacing 12px
+        // Calculate aspect ratio: width / (image height + spacing + text height + border)
+        // Image height = cardWidth * 1.5 (2:3 ratio), text ~42px, spacing 12px, border 6px (3px top + 3px bottom)
         final imageHeight = actualCardWidth * 1.5;
-        final totalHeight = imageHeight + 12 + 42; // image + spacing + text
+        final totalHeight = imageHeight + 12 + 42 + 6; // image + spacing + text + border
         final aspectRatio = actualCardWidth / totalHeight;
 
         return GridView.builder(
@@ -697,90 +697,103 @@ class _SearchResultCardState extends State<_SearchResultCard> {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Image with rounded corners, no frame, with zoom animation
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: widget.cardWidth,
-                  height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
-                  child: Stack(
-                    children: [
-                      AnimatedScale(
-                        scale: _isHovered ? 1.1 : 1.0,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                        child: SmartImage(
-                          imageUrl: widget.item.poster,
-                          width: widget.cardWidth,
-                          height: widget.cardWidth * 1.5,
-                          fit: BoxFit.cover,
-                          priority: ImagePriority.visible,
-                          borderRadius: BorderRadius.circular(8),
-                          placeholderBuilder: (context) => Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.muted,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  widget.item.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 4,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                    height: 1.2,
+              // Image with rounded corners, with accent border on hover
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _isHovered 
+                        ? Theme.of(context).colorScheme.primary 
+                        : material.Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: SizedBox(
+                    width: widget.cardWidth,
+                    height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
+                    child: Stack(
+                      children: [
+                        AnimatedScale(
+                          scale: _isHovered ? 1.1 : 1.0,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: SmartImage(
+                            imageUrl: widget.item.poster,
+                            width: widget.cardWidth,
+                            height: widget.cardWidth * 1.5,
+                            fit: BoxFit.cover,
+                            priority: ImagePriority.visible,
+                            borderRadius: BorderRadius.circular(5),
+                            placeholderBuilder: (context) => Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.muted,
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    widget.item.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                      height: 1.2,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      // Rating overlay in bottom right corner
-                      if (widget.item.imdbRating != null)
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.background,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.border,
-                                width: 1,
+                        // Rating overlay in bottom right corner
+                        if (widget.item.imdbRating != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.background,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.border,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star,
+                                    size: 14,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.star,
-                                  size: 14,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1998,117 +2011,103 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Image with rounded corners, no frame, with zoom animation
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 240,
-                  height: 360,
-                  child: Stack(
-                    children: [
-                      AnimatedScale(
-                        scale: _isHovered ? 1.1 : 1.0,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                        child: SmartImage(
-                          imageUrl: widget.item.poster,
-                          width: 240,
-                          height: 360,
-                          fit: BoxFit.cover,
-                          priority: ImagePriority.visible,
-                          borderRadius: BorderRadius.circular(8),
-                          placeholderBuilder: (context) => Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.muted,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  widget.item.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 4,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                    height: 1.2,
+              // Image with rounded corners, with accent border on hover
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _isHovered 
+                        ? Theme.of(context).colorScheme.primary 
+                        : material.Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    width: 240,
+                    height: 360,
+                    child: Stack(
+                      children: [
+                        AnimatedScale(
+                          scale: _isHovered ? 1.1 : 1.0,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: SmartImage(
+                            imageUrl: widget.item.poster,
+                            width: 240,
+                            height: 360,
+                            fit: BoxFit.cover,
+                            priority: ImagePriority.visible,
+                            borderRadius: BorderRadius.circular(6),
+                            placeholderBuilder: (context) => Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.muted,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Text(
+                                    widget.item.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                      height: 1.2,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      // Play button overlay (shown on hover)
-                      AnimatedOpacity(
-                        opacity: _isHovered ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: Center(
-                          child: Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: material.Colors.black.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  spreadRadius: 2,
+                        // Rating overlay in bottom right corner
+                        if (widget.item.imdbRating != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.background,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.border,
+                                  width: 1,
                                 ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.play_arrow,
-                              size: 40,
-                              color: Theme.of(context).colorScheme.primaryForeground,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Rating overlay in bottom right corner
-                      if (widget.item.imdbRating != null)
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.background,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.border,
-                                width: 1,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star,
+                                    size: 14,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.foreground,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.star,
-                                  size: 14,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2344,37 +2343,49 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
         child: SizedBox(
           width: 480, // Landscape 16:9 ratio
           height: 270,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Backdrop image
-                AnimatedScale(
-                  scale: _isHovered ? 1.05 : 1.0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: SmartImage(
-                    imageUrl: widget.item.background,
-                    width: double.infinity,
-                    height: 270,
-                    fit: BoxFit.cover,
-                    priority: ImagePriority.visible,
-                    placeholderBuilder: (context) => Container(
-                      color: Theme.of(context).colorScheme.muted,
-                      child: Center(
-                        child: Text(
-                          widget.item.name,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.foreground,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isHovered 
+                    ? Theme.of(context).colorScheme.primary 
+                    : material.Colors.transparent,
+                width: 3,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Backdrop image
+                  AnimatedScale(
+                    scale: _isHovered ? 1.05 : 1.0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    child: SmartImage(
+                      imageUrl: widget.item.background,
+                      width: double.infinity,
+                      height: 270,
+                      fit: BoxFit.cover,
+                      priority: ImagePriority.visible,
+                      placeholderBuilder: (context) => Container(
+                        color: Theme.of(context).colorScheme.muted,
+                        child: Center(
+                          child: Text(
+                            widget.item.name,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.foreground,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
                 // Gradient overlay for better logo/text visibility in bottom left corner
                 Positioned.fill(
                   child: IgnorePointer(
@@ -2489,33 +2500,6 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                     ),
                   ),
                 ),
-                // Play button overlay (shown on hover)
-                AnimatedOpacity(
-                  opacity: _isHovered ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Center(
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
-                        boxShadow: [
-                          BoxShadow(
-                            color: material.Colors.black.withOpacity(0.3),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.play_arrow,
-                        size: 40,
-                        color: Theme.of(context).colorScheme.primaryForeground,
-                      ),
-                    ),
-                  ),
-                ),
                 // Progress bar at the bottom
                 Positioned(
                   bottom: 0,
@@ -2541,6 +2525,7 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
