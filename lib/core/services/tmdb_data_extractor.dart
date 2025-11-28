@@ -61,6 +61,74 @@ class TmdbDataExtractor {
     return null;
   }
 
+  /// Extract maturity rating descriptors from TMDB data
+  /// For movies: extracts from release_dates.results[US].release_dates[].descriptors
+  /// For TV shows: extracts from content_ratings.results[US].descriptors
+  static String? extractMaturityRatingDescriptors(
+    Map<String, dynamic> tmdbData,
+    String type,
+  ) {
+    try {
+      if (type == 'movie') {
+        final releaseDates = tmdbData['release_dates'] as Map<String, dynamic>?;
+        if (releaseDates != null) {
+          final results = releaseDates['results'] as List<dynamic>?;
+          if (results != null) {
+            final usRelease = results.firstWhere(
+              (r) => (r['iso_3166_1'] as String?) == 'US',
+              orElse: () => null,
+            ) as Map<String, dynamic>?;
+
+            if (usRelease != null) {
+              final releaseDatesList = usRelease['release_dates'] as List<dynamic>?;
+              if (releaseDatesList != null && releaseDatesList.isNotEmpty) {
+                // Find first release date with descriptors
+                for (final release in releaseDatesList) {
+                  final releaseMap = release as Map<String, dynamic>?;
+                  final descriptors = releaseMap?['descriptors'] as List<dynamic>?;
+                  if (descriptors != null && descriptors.isNotEmpty) {
+                    // Join descriptors with comma and space
+                    return descriptors
+                        .whereType<String>()
+                        .map((d) => d.trim())
+                        .where((d) => d.isNotEmpty)
+                        .join(', ');
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else if (type == 'series') {
+        final contentRatings = tmdbData['content_ratings'] as Map<String, dynamic>?;
+        if (contentRatings != null) {
+          final results = contentRatings['results'] as List<dynamic>?;
+          if (results != null) {
+            final usRating = results.firstWhere(
+              (r) => (r['iso_3166_1'] as String?) == 'US',
+              orElse: () => null,
+            ) as Map<String, dynamic>?;
+
+            if (usRating != null) {
+              final descriptors = usRating['descriptors'] as List<dynamic>?;
+              if (descriptors != null && descriptors.isNotEmpty) {
+                // Join descriptors with comma and space
+                return descriptors
+                    .whereType<String>()
+                    .map((d) => d.trim())
+                    .where((d) => d.isNotEmpty)
+                    .join(', ');
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error extracting maturity rating descriptors: $e');
+    }
+    return null;
+  }
+
   /// Extract cast and crew data from TMDB response
   /// Returns a map with 'cast' and 'crew' keys containing parsed CastCrewMember lists
   static Map<String, List<CastCrewMember>> extractCastAndCrew(

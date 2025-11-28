@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/tmdb_models.dart';
+import '../../features/library/models/episode.dart';
 import 'configuration_service.dart';
 import 'logging_service.dart';
 
@@ -166,7 +167,7 @@ class TmdbMetadataService {
   }
 
   /// Fetch TV season metadata from TMDB (with caching)
-  Future<TmdbSeason?> getTvSeason(int tmdbId, int seasonNumber) async {
+  Future<Season?> getTvSeason(int tmdbId, int seasonNumber) async {
     if (tmdbId <= 0) {
       _logger.error('Invalid TMDB ID: $tmdbId');
       return null;
@@ -178,7 +179,7 @@ class TmdbMetadataService {
     final cached = _cache[cacheKey];
     if (cached != null && !cached.isExpired) {
       _logger.debug('Using cached TV season metadata for TMDB ID: $tmdbId Season: $seasonNumber');
-      return TmdbSeason.fromJson(cached.data);
+      return Season.fromJson(cached.data);
     }
 
     try {
@@ -194,7 +195,7 @@ class TmdbMetadataService {
         _cleanupCache();
       }
 
-      return TmdbSeason.fromJson(data);
+      return Season.fromJson(data);
     } catch (e) {
       // 404 means season doesn't exist, which is valid
       if (e is DioException && e.response?.statusCode == 404) {

@@ -702,7 +702,7 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _isHovered 
                         ? Theme.of(context).colorScheme.primary 
@@ -712,87 +712,87 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(5),
-                  child: SizedBox(
-                    width: widget.cardWidth,
-                    height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
-                    child: Stack(
-                      children: [
-                        AnimatedScale(
-                          scale: _isHovered ? 1.1 : 1.0,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: SmartImage(
-                            imageUrl: widget.item.poster,
-                            width: widget.cardWidth,
-                            height: widget.cardWidth * 1.5,
-                            fit: BoxFit.cover,
-                            priority: ImagePriority.visible,
+                child: SizedBox(
+                  width: widget.cardWidth,
+                  height: widget.cardWidth * 1.5, // Maintain 2:3 aspect ratio
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHovered ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: SmartImage(
+                          imageUrl: widget.item.poster,
+                          width: widget.cardWidth,
+                          height: widget.cardWidth * 1.5,
+                          fit: BoxFit.cover,
+                          priority: ImagePriority.visible,
                             borderRadius: BorderRadius.circular(5),
-                            placeholderBuilder: (context) => Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.muted,
+                          placeholderBuilder: (context) => Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.muted,
                                 borderRadius: BorderRadius.circular(5),
-                              ),
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Text(
-                                    widget.item.name,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.foreground,
-                                      height: 1.2,
-                                    ),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  widget.item.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                    height: 1.2,
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        // Rating overlay in bottom right corner
-                        if (widget.item.imdbRating != null)
-                          Positioned(
-                            bottom: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.background,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.border,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.star,
-                                    size: 14,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.foreground,
-                                    ),
-                                  ),
-                                ],
+                      ),
+                      // Rating overlay in bottom right corner
+                      if (widget.item.imdbRating != null)
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.background,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.border,
+                                width: 1,
                               ),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                      ],
+                        ),
+                    ],
                     ),
                   ),
                 ),
@@ -1708,15 +1708,15 @@ class _HeroSectionSkeleton extends StatelessWidget {
                 bottom: 60,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   // Logo skeleton (positioned early in the column, matching actual layout)
-                  Container(
-                    width: 400,
+                      Container(
+                        width: 400,
                     height: 100,
                     color: Colors.white.withOpacity(0.8),
-                  ).asSkeleton(),
+                      ).asSkeleton(),
                   const SizedBox(height: 20),
 
                   // Metadata skeleton
@@ -1737,41 +1737,41 @@ class _HeroSectionSkeleton extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // Description skeleton
-                  Container(
-                    height: 20,
-                    width: 600,
-                    color: Colors.white.withOpacity(0.7),
-                  ).asSkeleton(),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 20,
-                    width: 500,
-                    color: Colors.white.withOpacity(0.7),
-                  ).asSkeleton(),
-                  const SizedBox(height: 24),
+                      // Description skeleton
+                      Container(
+                        height: 20,
+                        width: 600,
+                        color: Colors.white.withOpacity(0.7),
+                      ).asSkeleton(),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 20,
+                        width: 500,
+                        color: Colors.white.withOpacity(0.7),
+                      ).asSkeleton(),
+                      const SizedBox(height: 24),
 
-                  // Buttons skeleton
-                  Row(
-                    children: [
-                      Container(
-                        height: 48,
-                        width: 140,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ).asSkeleton(),
-                      const SizedBox(width: 16),
-                      Container(
-                        height: 48,
-                        width: 140,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ).asSkeleton(),
-                    ],
+                      // Buttons skeleton
+                      Row(
+                        children: [
+                          Container(
+                            height: 48,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ).asSkeleton(),
+                          const SizedBox(width: 16),
+                          Container(
+                            height: 48,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ).asSkeleton(),
+                        ],
                   ),
                 ],
               ),
@@ -2016,7 +2016,7 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _isHovered 
                         ? Theme.of(context).colorScheme.primary 
@@ -2026,87 +2026,87 @@ class _CatalogItemCardState extends State<_CatalogItemCard> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    width: 240,
-                    height: 360,
-                    child: Stack(
-                      children: [
-                        AnimatedScale(
-                          scale: _isHovered ? 1.1 : 1.0,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: SmartImage(
-                            imageUrl: widget.item.poster,
-                            width: 240,
-                            height: 360,
-                            fit: BoxFit.cover,
-                            priority: ImagePriority.visible,
+                child: SizedBox(
+                  width: 240,
+                  height: 360,
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHovered ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: SmartImage(
+                          imageUrl: widget.item.poster,
+                          width: 240,
+                          height: 360,
+                          fit: BoxFit.cover,
+                          priority: ImagePriority.visible,
                             borderRadius: BorderRadius.circular(6),
-                            placeholderBuilder: (context) => Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.muted,
+                          placeholderBuilder: (context) => Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.muted,
                                 borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Text(
-                                    widget.item.name,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.foreground,
-                                      height: 1.2,
-                                    ),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  widget.item.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                    height: 1.2,
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        // Rating overlay in bottom right corner
-                        if (widget.item.imdbRating != null)
-                          Positioned(
-                            bottom: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.background,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.border,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.star,
-                                    size: 14,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.foreground,
-                                    ),
-                                  ),
-                                ],
+                      ),
+                      // Rating overlay in bottom right corner
+                      if (widget.item.imdbRating != null)
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.background,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.border,
+                                width: 1,
                               ),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(double.tryParse(widget.item.imdbRating!) ?? 0.0).toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                      ],
+                        ),
+                    ],
                     ),
                   ),
                 ),
@@ -2347,7 +2347,7 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: _isHovered 
                     ? Theme.of(context).colorScheme.primary 
@@ -2357,35 +2357,35 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(5),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Backdrop image
-                  AnimatedScale(
-                    scale: _isHovered ? 1.05 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: SmartImage(
-                      imageUrl: widget.item.background,
-                      width: double.infinity,
-                      height: 270,
-                      fit: BoxFit.cover,
-                      priority: ImagePriority.visible,
-                      placeholderBuilder: (context) => Container(
-                        color: Theme.of(context).colorScheme.muted,
-                        child: Center(
-                          child: Text(
-                            widget.item.name,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.foreground,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Backdrop image
+                AnimatedScale(
+                  scale: _isHovered ? 1.05 : 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: SmartImage(
+                    imageUrl: widget.item.background,
+                    width: double.infinity,
+                    height: 270,
+                    fit: BoxFit.cover,
+                    priority: ImagePriority.visible,
+                    placeholderBuilder: (context) => Container(
+                      color: Theme.of(context).colorScheme.muted,
+                      child: Center(
+                        child: Text(
+                          widget.item.name,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.foreground,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                     ),
                   ),
+                ),
                 // Gradient overlay for better logo/text visibility in bottom left corner
                 Positioned.fill(
                   child: IgnorePointer(
@@ -2523,9 +2523,9 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                 ),
               ],
             ),
+            ),
           ),
         ),
-      ),
       ),
     );
   }

@@ -54,6 +54,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
   bool _isCheckingLibrary = true;
   Map<String, dynamic>? _tmdbMetadata; // Store raw TMDB metadata
   String? _maturityRating; // Store maturity rating for hero card
+  String? _maturityRatingDescriptors; // Store maturity rating descriptors
   String? _numberOfSeasons; // Store number of seasons for series
 
   @override
@@ -659,6 +660,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       if (tmdbData != null && mounted) {
         // Use centralized extractor for maturity rating
         final rating = TmdbDataExtractor.extractMaturityRating(tmdbData, item.type);
+        final descriptors = TmdbDataExtractor.extractMaturityRatingDescriptors(tmdbData, item.type);
         
         // Extract number of seasons for series
         String? numSeasons;
@@ -673,6 +675,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         setState(() {
           _tmdbMetadata = tmdbData;
           _maturityRating = rating;
+          _maturityRatingDescriptors = descriptors;
           _numberOfSeasons = numSeasons;
         });
       }
@@ -1375,11 +1378,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             style: const TextStyle(fontSize: 16),
           ),
         ),
-        if (hasRating && showDescription) ...[
+        if (hasRating && showDescription && _maturityRatingDescriptors != null && _maturityRatingDescriptors!.isNotEmpty) ...[
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              'Language, Suggestive Dialogue',
+              _maturityRatingDescriptors!,
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.mutedForeground,
