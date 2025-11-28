@@ -164,10 +164,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add Addon'),
-        content: TextField(
-          controller: manifestUrlController,
-          placeholder: const Text('https://addon.example.com/manifest.json'),
-          autofocus: true,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 400,
+            minWidth: 300,
+          ),
+          child: TextField(
+            controller: manifestUrlController,
+            placeholder: const Text('https://addon.example.com/manifest.json'),
+            autofocus: true,
+          ),
         ),
         actions: [
           SecondaryButton(
@@ -192,7 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
-        child: CircularProgressIndicator(),
+        child: LoadingIndicator(),
       ),
     );
 
@@ -577,7 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: LoadingIndicator(),
                           )
                         else if (_isTraktAuthenticated)
                           Row(
@@ -1007,7 +1013,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                const LoadingIndicator(),
                 const SizedBox(height: 16),
                 const Text(
                   'Please visit the URL and enter the code to authorize this app.',
@@ -1081,7 +1087,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const LoadingIndicator(),
                   const SizedBox(height: 16),
                   const Text(
                     'Syncing history...',
@@ -1241,112 +1247,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
     void showProgressDialog() {
       if (!mounted || isDialogOpen) return;
       isDialogOpen = true;
-      material.showDialog(
+      showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) {
-          return material.Dialog(
-            child: ConstrainedBox(
+          return AlertDialog(
+            title: const Text('Syncing Watch History'),
+            content: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxWidth: 400,
                 minWidth: 300,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                  const Text(
-                    'Syncing Watch History',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  StreamBuilder<Map<String, dynamic>>(
-                    stream: progressController.stream,
-                    initialData: {'current': 0, 'total': 100, 'status': 'Starting sync...'},
-                    builder: (context, snapshot) {
-                      final data = snapshot.data ?? {'current': 0, 'total': 100, 'status': 'Starting sync...'};
-                      final current = data['current'] as int? ?? 0;
-                      final total = data['total'] as int? ?? 100;
-                      final status = data['status'] as String? ?? 'Starting sync...';
-                      final progress = total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
-                      
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Progress bar using shadcn Progress component with visible background
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondary,
-                              borderRadius: BorderRadius.circular(4),
+              child: StreamBuilder<Map<String, dynamic>>(
+                stream: progressController.stream,
+                initialData: {'current': 0, 'total': 100, 'status': 'Starting sync...'},
+                builder: (context, snapshot) {
+                  final data = snapshot.data ?? {'current': 0, 'total': 100, 'status': 'Starting sync...'};
+                  final current = data['current'] as int? ?? 0;
+                  final total = data['total'] as int? ?? 100;
+                  final status = data['status'] as String? ?? 'Starting sync...';
+                  final progress = total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
+                  
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Progress bar using shadcn Progress component with visible background
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.secondary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Progress(
+                          progress: (progress * 100).clamp(0, 100),
+                          min: 0,
+                          max: 100,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Status text
+                      Text(
+                        status,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.foreground,
+                        ),
+                      ),
+                      if (total > 0) ...[
+                        const SizedBox(height: 8),
+                        // Progress percentage and count
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${(progress * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context).colorScheme.foreground,
+                              ),
                             ),
-                            child: Progress(
-                              progress: (progress * 100).clamp(0, 100),
-                              min: 0,
-                              max: 100,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          // Status text
-                          Text(
-                            status,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.foreground,
-                            ),
-                          ),
-                          if (total > 0) ...[
-                            const SizedBox(height: 8),
-                            // Progress percentage and count
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${(progress * 100).toStringAsFixed(0)}%',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                  ),
-                                ),
-                                Text(
-                                  '$current / $total items',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).colorScheme.foreground,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              '$current / $total items',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.foreground,
+                              ),
                             ),
                           ],
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  // Cancel button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      GhostButton(
-                        onPressed: () {
-                          ServiceLocator.instance.watchHistoryService.cancelSync();
-                          Navigator.of(context).pop();
-                          isDialogOpen = false;
-                          progressController.close();
-                        },
-                        child: const Text('Cancel'),
-                      ),
+                        ),
+                      ],
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
-            ),
+            actions: [
+              GhostButton(
+                onPressed: () {
+                  ServiceLocator.instance.watchHistoryService.cancelSync();
+                  Navigator.of(context).pop();
+                  isDialogOpen = false;
+                  progressController.close();
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
           );
         },
       );
