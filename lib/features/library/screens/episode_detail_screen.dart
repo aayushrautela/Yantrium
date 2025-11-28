@@ -920,54 +920,54 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        'S${widget.seasonNumber.toString().padLeft(2, '0')}E${_currentEpisode.episodeNumber.toString().padLeft(2, '0')}',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.white.withOpacity(0.7),
-                                        ),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'S${widget.seasonNumber.toString().padLeft(2, '0')}E${_currentEpisode.episodeNumber.toString().padLeft(2, '0')}',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.white.withOpacity(0.7),
+                                            ),
+                                          ),
+                                          // Duration
+                                          if (_currentEpisode.runtime != null) ...[
+                                            const SizedBox(width: 16),
+                                            Text(
+                                              '${_currentEpisode.runtime}m',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white.withOpacity(0.7),
+                                              ),
+                                            ),
+                                          ],
+                                          // Release Date
+                                          if (_currentEpisode.airDate != null && _currentEpisode.airDate!.isNotEmpty) ...[
+                                            const SizedBox(width: 16),
+                                            Text(
+                                              _formatEpisodeDate(_currentEpisode.airDate!),
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white.withOpacity(0.7),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
                                         _currentEpisode.name,
                                         style: const TextStyle(
-                                          fontSize: 32,
+                                          fontSize: 38,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.white,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-
-                                const SizedBox(height: 20),
-
-                                // Metadata (Duration and Release Date)
-                                Wrap(
-                                  spacing: 16,
-                                  runSpacing: 10,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    // Duration
-                                    if (_currentEpisode.runtime != null)
-                                      Text(
-                                        '${_currentEpisode.runtime}m',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.white.withOpacity(0.7),
-                                        ),
-                                      ),
-                                    // Release Date
-                                    if (_currentEpisode.airDate != null && _currentEpisode.airDate!.isNotEmpty)
-                                      Text(
-                                        _formatEpisodeDate(_currentEpisode.airDate!),
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.white.withOpacity(0.7),
-                                        ),
-                                      ),
-                                  ],
                                 ),
 
                                 const SizedBox(height: 20),
@@ -1488,6 +1488,61 @@ class _StreamItem extends StatefulWidget {
 class _StreamItemState extends State<_StreamItem> {
   bool _isHovered = false;
 
+  String _getAllStreamData() {
+    final parts = <String>[];
+    
+    if (widget.stream.id != null) {
+      parts.add('id: ${widget.stream.id}');
+    }
+    if (widget.stream.title != null && widget.stream.title!.isNotEmpty) {
+      parts.add('title: ${widget.stream.title}');
+    }
+    if (widget.stream.name != null && widget.stream.name!.isNotEmpty) {
+      parts.add('name: ${widget.stream.name}');
+    }
+    if (widget.stream.description != null && widget.stream.description!.isNotEmpty) {
+      parts.add('description: ${widget.stream.description}');
+    }
+    if (widget.stream.url.isNotEmpty) {
+      parts.add('url: ${widget.stream.url.substring(0, widget.stream.url.length > 50 ? 50 : widget.stream.url.length)}${widget.stream.url.length > 50 ? "..." : ""}');
+    }
+    if (widget.stream.quality != null && widget.stream.quality!.isNotEmpty) {
+      parts.add('quality: ${widget.stream.quality}');
+    }
+    if (widget.stream.type != null && widget.stream.type!.isNotEmpty) {
+      parts.add('type: ${widget.stream.type}');
+    }
+    if (widget.stream.addonId != null && widget.stream.addonId!.isNotEmpty) {
+      parts.add('addonId: ${widget.stream.addonId}');
+    }
+    if (widget.stream.addonName != null && widget.stream.addonName!.isNotEmpty) {
+      parts.add('addonName: ${widget.stream.addonName}');
+    }
+    if (widget.stream.infoHash != null && widget.stream.infoHash!.isNotEmpty) {
+      parts.add('infoHash: ${widget.stream.infoHash}');
+    }
+    if (widget.stream.fileIdx != null) {
+      parts.add('fileIdx: ${widget.stream.fileIdx}');
+    }
+    if (widget.stream.size != null) {
+      parts.add('size: ${widget.stream.size}');
+    }
+    if (widget.stream.isFree != null) {
+      parts.add('isFree: ${widget.stream.isFree}');
+    }
+    if (widget.stream.isDebrid != null) {
+      parts.add('isDebrid: ${widget.stream.isDebrid}');
+    }
+    if (widget.stream.subtitles != null && widget.stream.subtitles!.isNotEmpty) {
+      parts.add('subtitles: ${widget.stream.subtitles!.length} available');
+    }
+    if (widget.stream.behaviorHints != null && widget.stream.behaviorHints!.isNotEmpty) {
+      parts.add('behaviorHints: ${widget.stream.behaviorHints}');
+    }
+    
+    return parts.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -1532,15 +1587,16 @@ class _StreamItemState extends State<_StreamItem> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.displayName).semiBold(),
-                    if (widget.stream.description != null &&
-                        widget.stream.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.stream.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ).muted().small(),
-                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      _getAllStreamData(),
+                      maxLines: 10,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ).muted().small(),
                   ],
                 ),
               ),
