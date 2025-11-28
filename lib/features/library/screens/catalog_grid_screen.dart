@@ -1694,70 +1694,71 @@ class _HeroSectionSkeleton extends StatelessWidget {
                 top: 100,
                 bottom: 60,
               ),
-              child: Stack(
-                fit: StackFit.expand,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Main content column (title, description, buttons)
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Logo skeleton (positioned early in the column, matching actual layout)
+                  Container(
+                    width: 400,
+                    height: 100,
+                    color: Colors.white.withOpacity(0.8),
+                  ).asSkeleton(),
+                  const SizedBox(height: 20),
+
+                  // Metadata skeleton
+                  Row(
                     children: [
-                      // Title skeleton
-                      Container(
-                        height: 48,
-                        width: 400,
-                        color: Colors.white.withOpacity(0.9),
-                      ).asSkeleton(),
-                      const SizedBox(height: 16),
-
-                      // Description skeleton
                       Container(
                         height: 20,
-                        width: 600,
+                        width: 100,
                         color: Colors.white.withOpacity(0.7),
                       ).asSkeleton(),
-                      const SizedBox(height: 8),
+                      const SizedBox(width: 16),
                       Container(
                         height: 20,
-                        width: 500,
+                        width: 80,
                         color: Colors.white.withOpacity(0.7),
                       ).asSkeleton(),
-                      const SizedBox(height: 24),
-
-                      // Buttons skeleton
-                      Row(
-                        children: [
-                          Container(
-                            height: 48,
-                            width: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ).asSkeleton(),
-                          const SizedBox(width: 16),
-                          Container(
-                            height: 48,
-                            width: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ).asSkeleton(),
-                        ],
-                      ),
                     ],
                   ),
+                  const SizedBox(height: 20),
 
-                  // Logo skeleton (bottom left corner)
-                  Positioned(
-                    bottom: 20,
-                    left: 0,
-                    child: Container(
-                      width: 200,
-                      height: 60,
-                      color: Colors.white.withOpacity(0.8),
-                    ).asSkeleton(),
+                  // Description skeleton
+                  Container(
+                    height: 20,
+                    width: 600,
+                    color: Colors.white.withOpacity(0.7),
+                  ).asSkeleton(),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 20,
+                    width: 500,
+                    color: Colors.white.withOpacity(0.7),
+                  ).asSkeleton(),
+                  const SizedBox(height: 24),
+
+                  // Buttons skeleton
+                  Row(
+                    children: [
+                      Container(
+                        height: 48,
+                        width: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ).asSkeleton(),
+                      const SizedBox(width: 16),
+                      Container(
+                        height: 48,
+                        width: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ).asSkeleton(),
+                    ],
                   ),
                 ],
               ),
