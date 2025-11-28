@@ -660,7 +660,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
       if (tmdbData != null && mounted) {
         // Use centralized extractor for maturity rating
         final rating = TmdbDataExtractor.extractMaturityRating(tmdbData, item.type);
-        final descriptors = TmdbDataExtractor.extractMaturityRatingDescriptors(tmdbData, item.type);
+        final ratingName = TmdbDataExtractor.getMaturityRatingName(rating, item.type);
         
         // Extract number of seasons for series
         String? numSeasons;
@@ -675,7 +675,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         setState(() {
           _tmdbMetadata = tmdbData;
           _maturityRating = rating;
-          _maturityRatingDescriptors = descriptors;
+          _maturityRatingDescriptors = ratingName;
           _numberOfSeasons = numSeasons;
         });
       }

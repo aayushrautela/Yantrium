@@ -61,71 +61,34 @@ class TmdbDataExtractor {
     return null;
   }
 
-  /// Extract maturity rating descriptors from TMDB data
-  /// For movies: extracts from release_dates.results[US].release_dates[].descriptors
-  /// For TV shows: extracts from content_ratings.results[US].descriptors
-  static String? extractMaturityRatingDescriptors(
-    Map<String, dynamic> tmdbData,
-    String type,
-  ) {
-    try {
-      if (type == 'movie') {
-        final releaseDates = tmdbData['release_dates'] as Map<String, dynamic>?;
-        if (releaseDates != null) {
-          final results = releaseDates['results'] as List<dynamic>?;
-          if (results != null) {
-            final usRelease = results.firstWhere(
-              (r) => (r['iso_3166_1'] as String?) == 'US',
-              orElse: () => null,
-            ) as Map<String, dynamic>?;
-
-            if (usRelease != null) {
-              final releaseDatesList = usRelease['release_dates'] as List<dynamic>?;
-              if (releaseDatesList != null && releaseDatesList.isNotEmpty) {
-                // Find first release date with descriptors
-                for (final release in releaseDatesList) {
-                  final releaseMap = release as Map<String, dynamic>?;
-                  final descriptors = releaseMap?['descriptors'] as List<dynamic>?;
-                  if (descriptors != null && descriptors.isNotEmpty) {
-                    // Join descriptors with comma and space
-                    return descriptors
-                        .whereType<String>()
-                        .map((d) => d.trim())
-                        .where((d) => d.isNotEmpty)
-                        .join(', ');
-                  }
-                }
-              }
-            }
-          }
-        }
-      } else if (type == 'series') {
-        final contentRatings = tmdbData['content_ratings'] as Map<String, dynamic>?;
-        if (contentRatings != null) {
-          final results = contentRatings['results'] as List<dynamic>?;
-          if (results != null) {
-            final usRating = results.firstWhere(
-              (r) => (r['iso_3166_1'] as String?) == 'US',
-              orElse: () => null,
-            ) as Map<String, dynamic>?;
-
-            if (usRating != null) {
-              final descriptors = usRating['descriptors'] as List<dynamic>?;
-              if (descriptors != null && descriptors.isNotEmpty) {
-                // Join descriptors with comma and space
-                return descriptors
-                    .whereType<String>()
-                    .map((d) => d.trim())
-                    .where((d) => d.isNotEmpty)
-                    .join(', ');
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error extracting maturity rating descriptors: $e');
+  /// Get the full name/description for a maturity rating
+  /// Maps rating codes to their full names based on MPAA (movies) and TV Parental Guidelines (series)
+  static String? getMaturityRatingName(String? rating, String type) {
+    if (rating == null || rating.isEmpty) {
+      return null;
     }
+
+    if (type == 'movie') {
+      const movieRatings = {
+        'G': 'General Audiences',
+        'PG': 'Parental Guidance Suggested',
+        'PG-13': 'Parents Strongly Cautioned',
+        'R': 'Restricted',
+        'NC-17': 'Adults Only',
+      };
+      return movieRatings[rating.toUpperCase()];
+    } else if (type == 'series') {
+      const tvRatings = {
+        'TV-Y': 'All Children',
+        'TV-Y7': 'Directed to Older Children',
+        'TV-G': 'General Audience',
+        'TV-PG': 'Parental Guidance Suggested',
+        'TV-14': 'Parents Strongly Cautioned',
+        'TV-MA': 'Mature Audience Only',
+      };
+      return tvRatings[rating.toUpperCase()];
+    }
+
     return null;
   }
 
