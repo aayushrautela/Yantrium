@@ -237,19 +237,19 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             debugPrint('Could not get IMDB ID for series, cannot generate episode ID');
           }
           if (mounted) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Cannot Play Series'),
-                content: const Text('Unable to identify this series. Please try again.'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Cannot Play Series'),
+              content: const Text('Unable to identify this series. Please try again.'),
+              actions: [
+                GhostButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
           }
           return;
         }
@@ -264,7 +264,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
               title: const Text('No Episodes Available'),
               content: const Text('No episodes were found for this series.'),
               actions: [
-                TextButton(
+                GhostButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('OK'),
                 ),
@@ -314,7 +314,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
               title: const Text('No Streams Available'),
               content: const Text('No streams were found for this content. Please try enabling more addons.'),
               actions: [
-                TextButton(
+                GhostButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('OK'),
                 ),
@@ -397,7 +397,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             title: const Text('Error'),
             content: Text('Failed to load streams: $e'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -474,7 +474,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             title: const Text('Cannot Play Episode'),
             content: const Text('Unable to identify this series. Please try again.'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -530,7 +530,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
               title: const Text('No Streams Available'),
               content: const Text('No streams were found for this episode. Please try enabling more addons.'),
               actions: [
-                TextButton(
+                GhostButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('OK'),
                 ),
@@ -607,7 +607,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
             title: const Text('Error'),
             content: Text('Failed to load streams: $e'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -795,12 +795,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                                     Theme.of(context)
                                         .colorScheme
                                         .background
-                                        .withOpacity(0.6),
+                                        .withValues(alpha: 0.6),
                                     Theme.of(context)
                                         .colorScheme
                                         .background
-                                        .withOpacity(0.2),
-                                    Colors.transparent,
+                                        .withValues(alpha: 0.2),
+                                    material.Colors.transparent,
                                   ],
                                   stops: const [0.0, 0.15, 0.35, 1.0],
                                 ),
@@ -825,11 +825,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                               colors: [
                                 Theme.of(context).colorScheme.background,
                                 Theme.of(context).colorScheme.background,
-                                Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                Theme.of(context).colorScheme.background.withOpacity(0.7),
-                                Theme.of(context).colorScheme.background.withOpacity(0.5),
-                                Theme.of(context).colorScheme.background.withOpacity(0.1),
-                                Colors.transparent,
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.7),
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.1),
+                                material.Colors.transparent,
                               ],
                               stops: const [0.0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85],
                             ),
@@ -939,10 +939,10 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                               width: 600,
                               child: Text(
                                 item.description!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   height: 1.5,
-                                  color: Colors.white,
+                                  color: Theme.of(context).colorScheme.foreground,
                                 ),
                               ),
                             ),
@@ -1464,7 +1464,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         'icon': Icons.movie,
         'label': 'TMDB',
         'rating': tmdbRating,
-        'color': Colors.blue,
+        'color': Theme.of(context).colorScheme.primary,
       });
     }
     
@@ -1473,7 +1473,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         'icon': Icons.star,
         'label': 'IMDb',
         'rating': imdbRating,
-        'color': Colors.amber,
+        'color': Theme.of(context).colorScheme.primary,
       });
     }
     
@@ -1482,7 +1482,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         'icon': Icons.local_movies,
         'label': 'RT',
         'rating': rottenTomatoesRating,
-        'color': Colors.red,
+        'color': Theme.of(context).colorScheme.destructive,
       });
     }
     
@@ -1491,7 +1491,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         'icon': Icons.rate_review,
         'label': 'MC',
         'rating': metacriticRating,
-        'color': Colors.green,
+        'color': Theme.of(context).colorScheme.primary,
       });
     }
 
@@ -2041,7 +2041,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
         child: Center(
           child: Text(
             'No cast and crew information available',
-            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+            style: TextStyle(color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7)),
           ),
         ),
       );
@@ -2105,12 +2105,12 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
     }
 
     if (_seasons.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 400,
         child: Center(
           child: Text(
             'No episodes available',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Theme.of(context).colorScheme.foreground),
           ),
         ),
       );
@@ -2163,15 +2163,15 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
-                              color: isSelected
+                                  color: isSelected
                                   ? Theme.of(context)
                                       .colorScheme
                                       .foreground
-                                      .withOpacity(0.1)
-                                  : Colors.transparent,
+                                      .withValues(alpha: 0.1)
+                                  : material.Colors.transparent,
                               border: Border(
                                 left: BorderSide(
-                                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                                  color: isSelected ? Theme.of(context).colorScheme.primary : material.Colors.transparent,
                                   width: 3,
                                 ),
                               ),
@@ -2215,15 +2215,15 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.transparent,
-                                Theme.of(context).colorScheme.background.withOpacity(0.8),
+                                material.Colors.transparent,
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                               ],
                             ),
                           ),
                           child: Center(
                             child: Icon(
                               Icons.keyboard_arrow_down,
-                              color: Theme.of(context).colorScheme.foreground.withOpacity(0.7),
+                              color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                               size: 24,
                             ),
                           ),
@@ -2424,7 +2424,7 @@ class _CastCrewCardState extends State<_CastCrewCard> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .foreground
-                                  .withOpacity(0.5),
+                                  .withValues(alpha: 0.5),
                             ),
                           );
                         },
@@ -2858,7 +2858,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                           errorBuilder: (context, error, stackTrace) =>
                                               Container(
                                             width: double.infinity,
-                                            color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                            color: Theme.of(context).colorScheme.muted.withValues(alpha: 0.7),
                                           ),
                                         )
                                       : Container(
@@ -2881,7 +2881,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -2910,7 +2910,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -2939,7 +2939,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -2962,7 +2962,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             child: IgnorePointer(
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
                                 ),
                               ),
                             ),
@@ -2980,9 +2980,9 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                     color: Theme.of(context).colorScheme.primary,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.play_arrow,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.foreground,
                                     size: 40,
                                   ),
                                 ),
@@ -3024,7 +3024,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .foreground
-                                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                   height: 1.4,
                                 ),
                                 maxLines: 5,
@@ -3078,49 +3078,50 @@ class _StreamSelectionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return material.Dialog(
-      child: material.Container(
+    return AlertDialog(
+      content: Container(
           width: 500,
-          constraints: const material.BoxConstraints(maxHeight: 600),
-          padding: const material.EdgeInsets.all(24),
-          child: material.Column(
-            mainAxisSize: material.MainAxisSize.min,
-            crossAxisAlignment: material.CrossAxisAlignment.start,
+          constraints: const BoxConstraints(maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              material.Row(
+              Row(
                 children: [
-                  material.Expanded(
+                  Expanded(
                     child: Text(title).h4(),
                   ),
-                  material.IconButton(
-                    icon: const material.Icon(material.Icons.close),
-                    onPressed: () => material.Navigator.of(context).pop(),
+                  IconButton(
+                    variance: ButtonVariance.ghost,
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
-            const material.SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text('${streams.length} stream${streams.length != 1 ? 's' : ''} available').muted(),
-            const material.SizedBox(height: 24),
+            const SizedBox(height: 24),
             
             // Stream list
-            material.Flexible(
+            Flexible(
               child: streams.isEmpty
-                  ? material.Center(
-                      child: material.Column(
-                        mainAxisSize: material.MainAxisSize.min,
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          material.Icon(
-                            material.Icons.video_library_outlined,
+                          Icon(
+                            Icons.video_library_outlined,
                             size: 48,
                             color: Theme.of(context).colorScheme.mutedForeground,
                           ),
-                          const material.SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           const Text('No streams available').muted(),
                         ],
                       ),
                     )
-                  : material.ListView.builder(
+                  : ListView.builder(
                       shrinkWrap: true,
                       itemCount: streams.length,
                       itemBuilder: (context, index) {
@@ -3128,7 +3129,7 @@ class _StreamSelectionDialog extends StatelessWidget {
                         return _StreamItem(
                           stream: stream,
                           displayName: _getStreamDisplayName(stream),
-                          onTap: () => material.Navigator.of(context).pop(stream),
+                          onTap: () => Navigator.of(context).pop(stream),
                         );
                       },
                     ),
@@ -3185,7 +3186,7 @@ class _StreamItemState extends State<_StreamItem> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Icon(
