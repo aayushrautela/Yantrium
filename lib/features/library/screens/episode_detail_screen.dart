@@ -41,6 +41,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
   late ScrollController _mainScrollController;
   late ScrollController _episodesScrollController;
   bool _showSeasonScrollArrow = false;
+  bool _hasScrolledToCurrentEpisode = false; // Track if we've already scrolled to current episode
   late Episode _currentEpisode; // Current episode with potentially enriched data
 
   @override
@@ -89,9 +90,10 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     );
   }
 
-  /// Scroll to the current episode in the episodes list
+  /// Scroll to the current episode in the episodes list (only on initial load)
   void _scrollToCurrentEpisode() {
-    if (!_episodesScrollController.hasClients || _seasons.isEmpty) return;
+    // Only scroll on initial load, not when switching episodes from within the page
+    if (_hasScrolledToCurrentEpisode || !_episodesScrollController.hasClients || _seasons.isEmpty) return;
 
     // Combine all episodes from all seasons into a single list
     final allEpisodes = <({Episode episode, int seasonNumber})>[];
@@ -120,6 +122,9 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         duration: const Duration(milliseconds: 500),
         curve: material.Curves.easeInOut,
       );
+      
+      // Mark that we've scrolled to prevent scrolling again when switching episodes
+      _hasScrolledToCurrentEpisode = true;
     }
   }
 
@@ -692,11 +697,6 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         ),
       );
     }
-
-    // Scroll to current episode when episodes are already loaded and tab is displayed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToCurrentEpisode();
-    });
 
     // Combine all episodes from all seasons into a single list
     final allEpisodes = <({Episode episode, int seasonNumber})>[];
