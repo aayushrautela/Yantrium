@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import '../database/app_database.dart';
@@ -6,15 +7,39 @@ import 'service_locator.dart';
 import '../../features/library/models/catalog_item.dart';
 import '../../features/library/logic/library_repository.dart';
 
+/// Progress callback for sync operations
+typedef SyncProgressCallback = void Function(int current, int total, String status);
+
 /// Service for managing watch history from Trakt
 class WatchHistoryService {
   final AppDatabase _database;
   late final LibraryRepository _libraryRepository;
 
   static const String _lastSyncKey = 'last_trakt_sync';
+  
+  // Cancellation support
+  Completer<void>? _cancelCompleter;
+  bool _isCancelled = false;
+  static const int _batchSize = 50; // Process items in batches for better performance
 
   WatchHistoryService(this._database) {
     _libraryRepository = LibraryRepository(_database);
+  }
+  
+  /// Cancel ongoing sync operation
+  void cancelSync() {
+    _isCancelled = true;
+    _cancelCompleter?.complete();
+    debugPrint('[WatchHistoryService] Sync cancellation requested');
+  }
+  
+  /// Check if sync was cancelled
+  bool get isCancelled => _isCancelled;
+  
+  /// Reset cancellation state
+  void _resetCancellation() {
+    _isCancelled = false;
+    _cancelCompleter = Completer<void>();
   }
 
   /// Get the last sync timestamp from database
@@ -41,7 +66,12 @@ class WatchHistoryService {
   /// Uses incremental syncing by default - only fetches items since last sync
   /// Set forceRefresh=true to do a full sync of all history
   /// On first launch (no lastSyncTimestamp), automatically does a full sync
-  Future<int> syncWatchHistory({bool forceRefresh = false}) async {
+  /// onProgress callback provides progress updates (current, total, status)
+  Future<int> syncWatchHistory({
+    bool forceRefresh = false,
+    SyncProgressCallback? onProgress,
+  }) async {
+    _resetCancellation();
     try {
       // Check if user is authenticated
       if (!await ServiceLocator.instance.traktAuthService.isAuthenticated()) {
@@ -51,9 +81,18 @@ class WatchHistoryService {
 
       final now = DateTime.now();
       int syncedCount = 0;
+      int processedItems = 0; // Track processed items for progress
+      int totalItems = 100; // Will be updated as we discover items
 
+      onProgress?.call(0, 100, 'Fetching playback progress...');
+      
       // Get playback progress (currently watching items) - always fetch these
       final progressItems = await ServiceLocator.instance.traktWatchlistService.getPlaybackProgress();
+      
+      if (_isCancelled) {
+        debugPrint('[WatchHistoryService] Sync cancelled during progress fetch');
+        return 0;
+      }
 
       // Determine sync strategy
       final lastSyncTimestamp = await getLastSyncTimestamp();
@@ -65,16 +104,28 @@ class WatchHistoryService {
       final Set<String> traktIdsFromResponse = {};
 
       List<TraktHistoryItem> allHistoryItems = [];
+      
+      // Calculate total items for progress tracking
+      totalItems = progressItems.length;
 
       if (shouldDoIncrementalSync) {
         // Incremental sync: fetch all items since last sync with pagination
         debugPrint('Performing incremental sync since ${lastSyncTimestamp!.toIso8601String()}');
+        
+        onProgress?.call(0, 100, 'Fetching history items...');
         
         int page = 1;
         const int limit = 100; // Trakt API limit per page
         bool hasMore = true;
         
         while (hasMore) {
+          if (_isCancelled) {
+            debugPrint('[WatchHistoryService] Sync cancelled during history fetch');
+            return 0;
+          }
+          
+          onProgress?.call(allHistoryItems.length, allHistoryItems.length + limit, 'Fetching page $page...');
+          
           final pageItems = await ServiceLocator.instance.traktScrobbleService.getHistory(
             startAt: lastSyncTimestamp,
             endAt: now,
@@ -90,6 +141,8 @@ class WatchHistoryService {
           page++;
         }
         
+        totalItems = allHistoryItems.length + progressItems.length;
+        processedItems = 0; // Reset for incremental sync
         debugPrint('Fetched ${allHistoryItems.length} total history items since last sync');
       } else {
         // Full sync: Use getWatchedMovies/getWatchedShows APIs which are more efficient than paginating history
@@ -100,44 +153,105 @@ class WatchHistoryService {
           debugPrint('Performing full sync (force refresh) - fetching all watched items');
         }
         
+        onProgress?.call(0, 100, 'Fetching watched movies...');
+        
         // Fetch watched movies
         final watchedMovies = await ServiceLocator.instance.traktCoreService.getWatchedMovies();
         debugPrint('Fetched ${watchedMovies.length} watched movies');
         
+        if (_isCancelled) {
+          debugPrint('[WatchHistoryService] Sync cancelled during movies fetch');
+          return 0;
+        }
+        
+        onProgress?.call(0, 100, 'Fetching watched shows...');
+        
+        // Fetch watched shows to count total episodes
+        final watchedShows = await ServiceLocator.instance.traktCoreService.getWatchedShows();
+        
+        if (_isCancelled) {
+          debugPrint('[WatchHistoryService] Sync cancelled during shows fetch');
+          return 0;
+        }
+        
+        // Count total episodes for progress tracking
+        int totalEpisodes = 0;
+        for (final watchedShow in watchedShows) {
+          if (watchedShow.show != null && watchedShow.seasons != null) {
+            for (final seasonData in watchedShow.seasons!) {
+              final episodesList = seasonData['episodes'] as List<dynamic>?;
+              if (episodesList != null) {
+                totalEpisodes += episodesList.length;
+              }
+            }
+          }
+        }
+        
+        totalItems = watchedMovies.length + totalEpisodes + progressItems.length;
+        processedItems = 0; // Reset for full sync
+        
+        // Process movies in parallel batches
+        onProgress?.call(processedItems, totalItems, 'Processing movies...');
+        final movieFutures = <Future<bool>>[];
         for (final watchedMovie in watchedMovies) {
+          if (_isCancelled) break;
           if (watchedMovie.movie != null) {
-            await _processWatchedItem(
+            movieFutures.add(_processWatchedItem(
               type: 'movie',
               movie: watchedMovie.movie,
               watchedAt: watchedMovie.lastWatchedAt,
               traktIdsFromResponse: traktIdsFromResponse,
               now: now,
-            ).then((isNew) {
-              if (isNew) syncedCount++;
-            });
+            ));
+            
+            // Process in batches to avoid overwhelming the system
+            if (movieFutures.length >= _batchSize) {
+              final results = await Future.wait(movieFutures);
+              syncedCount += results.where((r) => r).length;
+              processedItems += movieFutures.length;
+              onProgress?.call(processedItems, totalItems, 'Processing movies...');
+              movieFutures.clear();
+              
+              // Yield to UI thread periodically
+              await Future.delayed(const Duration(milliseconds: 10));
+            }
           }
         }
         
-        // Fetch watched shows
-        final watchedShows = await ServiceLocator.instance.traktCoreService.getWatchedShows();
-        debugPrint('Fetched ${watchedShows.length} watched shows');
+        // Process remaining movies
+        if (movieFutures.isNotEmpty && !_isCancelled) {
+          final results = await Future.wait(movieFutures);
+          syncedCount += results.where((r) => r).length;
+          processedItems += movieFutures.length;
+          onProgress?.call(processedItems, totalItems, 'Processing movies...');
+        }
         
+        if (_isCancelled) {
+          debugPrint('[WatchHistoryService] Sync cancelled during movies processing');
+          return syncedCount;
+        }
+        
+        onProgress?.call(processedItems, totalItems, 'Processing episodes...');
+        
+        // Process episodes in parallel batches
+        final episodeFutures = <Future<bool>>[];
         for (final watchedShow in watchedShows) {
+          if (_isCancelled) break;
           if (watchedShow.show != null && watchedShow.seasons != null) {
-            // Process each episode in the show
             for (final seasonData in watchedShow.seasons!) {
               final seasonNumber = seasonData['number'] as int?;
               final episodesList = seasonData['episodes'] as List<dynamic>?;
               
               if (seasonNumber != null && episodesList != null) {
                 for (final episodeData in episodesList) {
+                  if (_isCancelled) break;
                   final episodeNumber = episodeData['number'] as int?;
                   final lastWatched = episodeData['last_watched_at'] != null 
                       ? DateTime.parse(episodeData['last_watched_at']) 
                       : watchedShow.lastWatchedAt;
                   
                   if (episodeNumber != null) {
-                    await _processWatchedItem(
+                    episodeFutures.add(_processWatchedItem(
                       type: 'episode',
                       show: watchedShow.show,
                       seasonNumber: seasonNumber,
@@ -145,9 +259,19 @@ class WatchHistoryService {
                       watchedAt: lastWatched,
                       traktIdsFromResponse: traktIdsFromResponse,
                       now: now,
-                    ).then((isNew) {
-                      if (isNew) syncedCount++;
-                    });
+                    ));
+                    
+                    // Process in batches
+                    if (episodeFutures.length >= _batchSize) {
+                      final results = await Future.wait(episodeFutures);
+                      syncedCount += results.where((r) => r).length;
+                      processedItems += episodeFutures.length;
+                      onProgress?.call(processedItems, totalItems, 'Processing episodes...');
+                      episodeFutures.clear();
+                      
+                      // Yield to UI thread periodically
+                      await Future.delayed(const Duration(milliseconds: 10));
+                    }
                   }
                 }
               }
@@ -155,181 +279,132 @@ class WatchHistoryService {
           }
         }
         
+        // Process remaining episodes
+        if (episodeFutures.isNotEmpty && !_isCancelled) {
+          final results = await Future.wait(episodeFutures);
+          syncedCount += results.where((r) => r).length;
+          processedItems += episodeFutures.length;
+          onProgress?.call(processedItems, totalItems, 'Processing episodes...');
+        }
+        
         debugPrint('Processed all watched items (full sync)');
       }
 
+      if (_isCancelled) {
+        debugPrint('[WatchHistoryService] Sync cancelled before processing progress items');
+        return syncedCount;
+      }
+      
       // Process playback progress items (0-100% progress)
-      // ... (rest of the logic remains similar)
+      onProgress?.call(processedItems, totalItems, 'Processing playback progress...');
       int progressItemsSynced = 0;
       int progressItemsUpdated = 0;
+      
+      // Process progress items in batches
+      final progressFutures = <Future<void>>[];
       for (final item in progressItems) {
-        try {
-          final traktId = _extractTraktId(item);
-          traktIdsFromResponse.add(traktId); // Track for deletion detection
-          
-          final type = item['type'] as String? ?? 'movie';
-          final progress = item['progress'] as double? ?? 0.0;
-          final pausedAt = item['paused_at'] != null 
-              ? DateTime.parse(item['paused_at'] as String)
-              : null;
-          final watchedAt = item['watched_at'] != null
-              ? DateTime.parse(item['watched_at'] as String)
-              : now;
-
-          // Extract movie or episode data
-          final movie = item['movie'] as Map<String, dynamic>?;
-          final episode = item['episode'] as Map<String, dynamic>?;
-          final show = item['show'] as Map<String, dynamic>?;
-
-          String title;
-          String? imdbId;
-          String? tmdbId;
-          int? seasonNumber;
-          int? episodeNumber;
-          int? runtime;
-
-          if (type == 'movie' && movie != null) {
-            title = movie['title'] as String? ?? 'Unknown';
-            final ids = movie['ids'] as Map<String, dynamic>?;
-            imdbId = ids?['imdb'] as String?;
-            tmdbId = ids?['tmdb']?.toString();
-            runtime = movie['runtime'] as int?;
-          } else if (type == 'episode' && episode != null && show != null) {
-            title = episode['title'] as String? ?? show['title'] as String? ?? 'Unknown';
-            final episodeIds = episode['ids'] as Map<String, dynamic>?;
-            final showIds = show['ids'] as Map<String, dynamic>?;
-            imdbId = showIds?['imdb'] as String?;
-            tmdbId = showIds?['tmdb']?.toString();
-            seasonNumber = episode['season'] as int?;
-            episodeNumber = episode['number'] as int?;
-            runtime = episode['runtime'] as int?;
-          } else {
-            continue; // Skip invalid items
+        if (_isCancelled) break;
+        
+        progressFutures.add(_processProgressItem(
+          item: item,
+          traktIdsFromResponse: traktIdsFromResponse,
+          now: now,
+        ).then((result) {
+          if (result != null) {
+            if (result['isNew'] == true) {
+              progressItemsSynced++;
+              syncedCount++;
+            } else {
+              progressItemsUpdated++;
+            }
           }
-
-          // Check if item already exists before upserting
-          final existingItem = await _database.getWatchHistoryByTraktId(traktId);
-          final isNew = existingItem == null;
-
-          // Upsert watch history
-          await _database.upsertWatchHistory(
-            WatchHistoryCompanion.insert(
-              traktId: traktId,
-              type: type,
-              title: title,
-              imdbId: Value(imdbId),
-              tmdbId: Value(tmdbId),
-              seasonNumber: Value(seasonNumber),
-              episodeNumber: Value(episodeNumber),
-              progress: progress,
-              watchedAt: watchedAt,
-              pausedAt: Value(pausedAt),
-              runtime: Value(runtime),
-              lastSyncedAt: now,
-              createdAt: now,
-            ),
-          );
-
-          if (isNew) {
-            progressItemsSynced++;
-            syncedCount++;
-          } else {
-            progressItemsUpdated++;
-          }
-        } catch (e) {
+        }).catchError((e) {
           debugPrint('Error processing watch history item: $e');
-          debugPrint('Item data: $item');
+        }));
+        
+        // Process in batches
+        if (progressFutures.length >= _batchSize) {
+          await Future.wait(progressFutures);
+          processedItems += progressFutures.length;
+          onProgress?.call(processedItems, totalItems, 'Processing playback progress...');
+          progressFutures.clear();
+          
+          // Yield to UI thread periodically
+          await Future.delayed(const Duration(milliseconds: 10));
         }
+      }
+      
+      // Process remaining progress items
+      if (progressFutures.isNotEmpty && !_isCancelled) {
+        await Future.wait(progressFutures);
+        processedItems += progressFutures.length;
+        onProgress?.call(processedItems, totalItems, 'Processing playback progress...');
       }
       debugPrint('Synced $progressItemsSynced new playback progress items (updated $progressItemsUpdated items)');
 
+      if (_isCancelled) {
+        debugPrint('[WatchHistoryService] Sync cancelled before processing history items');
+        return syncedCount;
+      }
+      
       // Process incremental history items only if incremental sync
       if (shouldDoIncrementalSync) {
+        onProgress?.call(processedItems, totalItems, 'Processing history items...');
         int historyItemsSynced = 0;
         int historyItemsUpdated = 0;
+        
+        // Process history items in batches
+        final historyFutures = <Future<void>>[];
         for (final item in allHistoryItems) {
-          try {
-            // History items represent completed watches (scrobbles)
-            final traktId = _extractTraktIdFromHistory(item);
-            traktIdsFromResponse.add(traktId); // Track for deletion detection
-            
-            final type = item.type;
-            final watchedAt = item.watchedAt;
-            final action = item.action;
-
-            // Only process 'watch' or 'scrobble' actions (not 'checkin')
-            if (action != 'watch' && action != 'scrobble') {
-              continue;
+          if (_isCancelled) break;
+          
+          historyFutures.add(_processHistoryItem(
+            item: item,
+            traktIdsFromResponse: traktIdsFromResponse,
+            now: now,
+          ).then((result) {
+            if (result != null) {
+              if (result['isNew'] == true) {
+                historyItemsSynced++;
+                syncedCount++;
+              } else {
+                historyItemsUpdated++;
+              }
             }
-
-            String title;
-            String? imdbId;
-            String? tmdbId;
-            int? seasonNumber;
-            int? episodeNumber;
-            int? runtime;
-            double progress = 100.0; // History items are completed watches
-
-            if (type == 'movie' && item.movie != null) {
-              final movie = item.movie!;
-              title = movie.title;
-              final ids = movie.ids;
-              imdbId = ids.imdb;
-              tmdbId = ids.tmdb?.toString();
-              // Note: movie runtime not available in history API
-            } else if (type == 'episode' && item.episode != null && item.show != null) {
-              final episode = item.episode!;
-              final show = item.show!;
-              title = episode.title;
-              final showIds = show.ids;
-              imdbId = showIds.imdb;
-              tmdbId = showIds.tmdb?.toString();
-              seasonNumber = episode.season;
-              episodeNumber = episode.number;
-            } else {
-              continue; // Skip invalid items
-            }
-
-            // Check if item already exists before upserting
-            final existingItem = await _database.getWatchHistoryByTraktId(traktId);
-            final isNew = existingItem == null;
-
-            // Upsert watch history - mark as 100% completed
-            await _database.upsertWatchHistory(
-              WatchHistoryCompanion.insert(
-                traktId: traktId,
-                type: type,
-                title: title,
-                imdbId: Value(imdbId),
-                tmdbId: Value(tmdbId),
-                seasonNumber: Value(seasonNumber),
-                episodeNumber: Value(episodeNumber),
-                progress: progress, // 100% for completed watches
-                watchedAt: watchedAt,
-                pausedAt: const Value.absent(),
-                runtime: Value(runtime),
-                lastSyncedAt: now,
-                createdAt: now,
-              ),
-            );
-
-            if (isNew) {
-              historyItemsSynced++;
-              syncedCount++;
-            } else {
-              historyItemsUpdated++;
-            }
-          } catch (e) {
+          }).catchError((e) {
             debugPrint('Error processing history item: $e');
-            debugPrint('Item data: $item');
+          }));
+          
+          // Process in batches
+          if (historyFutures.length >= _batchSize) {
+            await Future.wait(historyFutures);
+            processedItems += historyFutures.length;
+            onProgress?.call(processedItems, totalItems, 'Processing history items...');
+            historyFutures.clear();
+            
+            // Yield to UI thread periodically
+            await Future.delayed(const Duration(milliseconds: 10));
           }
+        }
+        
+        // Process remaining history items
+        if (historyFutures.isNotEmpty && !_isCancelled) {
+          await Future.wait(historyFutures);
+          processedItems += historyFutures.length;
+          onProgress?.call(processedItems, totalItems, 'Processing history items...');
         }
         debugPrint('Synced $historyItemsSynced new history items (updated $historyItemsUpdated items)');
       }
 
+      if (_isCancelled) {
+        debugPrint('[WatchHistoryService] Sync cancelled before cleanup');
+        return syncedCount;
+      }
+      
       // During full sync, detect and remove items deleted from Trakt website
       int deletedCount = 0;
       if (isFullSync) {
+        onProgress?.call(processedItems, totalItems, 'Checking for deleted items...');
         debugPrint('Full sync: Detecting items deleted from Trakt website...');
         
         // Get all local watch history items
@@ -337,7 +412,10 @@ class WatchHistoryService {
         
         // Find items in local DB that are NOT in Trakt response
         // Only delete items that were synced from Trakt (not local-only items)
+        final deleteFutures = <Future<void>>[];
         for (final localItem in localItems) {
+          if (_isCancelled) break;
+          
           // Skip local-only items (they start with "local:")
           if (localItem.traktId.startsWith('local:')) {
             continue;
@@ -345,10 +423,23 @@ class WatchHistoryService {
           
           // If this item is not in the Trakt response, it was deleted from Trakt
           if (!traktIdsFromResponse.contains(localItem.traktId)) {
-            await _database.deleteWatchHistory(localItem.traktId);
-            deletedCount++;
-            debugPrint('Deleted item from local DB (removed from Trakt): ${localItem.traktId} - ${localItem.title}');
+            deleteFutures.add(_database.deleteWatchHistory(localItem.traktId).then((_) {
+              deletedCount++;
+              debugPrint('Deleted item from local DB (removed from Trakt): ${localItem.traktId} - ${localItem.title}');
+            }));
+            
+            // Process deletions in batches
+            if (deleteFutures.length >= _batchSize) {
+              await Future.wait(deleteFutures);
+              deleteFutures.clear();
+              await Future.delayed(const Duration(milliseconds: 10));
+            }
           }
+        }
+        
+        // Process remaining deletions
+        if (deleteFutures.isNotEmpty && !_isCancelled) {
+          await Future.wait(deleteFutures);
         }
         
         if (deletedCount > 0) {
@@ -358,17 +449,185 @@ class WatchHistoryService {
         }
       }
 
+      if (_isCancelled) {
+        debugPrint('[WatchHistoryService] Sync cancelled before finalizing');
+        return syncedCount;
+      }
+      
       // Update the last sync timestamp if sync was successful
+      onProgress?.call(100, 100, 'Finalizing...');
       if (syncedCount > 0 || progressItemsUpdated > 0 || deletedCount > 0 || shouldDoIncrementalSync) {
         await setLastSyncTimestamp(now);
         debugPrint('Updated last sync timestamp to ${now.toIso8601String()}');
       }
 
       debugPrint('Total synced: $syncedCount new items');
+      onProgress?.call(100, 100, 'Complete');
       return syncedCount;
     } catch (e) {
       debugPrint('Error syncing watch history: $e');
+      onProgress?.call(0, 100, 'Error: ${e.toString()}');
       return 0;
+    } finally {
+      _isCancelled = false;
+    }
+  }
+  
+  /// Process a single progress item (helper method for parallel processing)
+  Future<Map<String, dynamic>?> _processProgressItem({
+    required Map<String, dynamic> item,
+    required Set<String> traktIdsFromResponse,
+    required DateTime now,
+  }) async {
+    try {
+      final traktId = _extractTraktId(item);
+      traktIdsFromResponse.add(traktId); // Track for deletion detection
+      
+      final type = item['type'] as String? ?? 'movie';
+      final progress = item['progress'] as double? ?? 0.0;
+      final pausedAt = item['paused_at'] != null 
+          ? DateTime.parse(item['paused_at'] as String)
+          : null;
+      final watchedAt = item['watched_at'] != null
+          ? DateTime.parse(item['watched_at'] as String)
+          : now;
+
+      // Extract movie or episode data
+      final movie = item['movie'] as Map<String, dynamic>?;
+      final episode = item['episode'] as Map<String, dynamic>?;
+      final show = item['show'] as Map<String, dynamic>?;
+
+      String title;
+      String? imdbId;
+      String? tmdbId;
+      int? seasonNumber;
+      int? episodeNumber;
+      int? runtime;
+
+      if (type == 'movie' && movie != null) {
+        title = movie['title'] as String? ?? 'Unknown';
+        final ids = movie['ids'] as Map<String, dynamic>?;
+        imdbId = ids?['imdb'] as String?;
+        tmdbId = ids?['tmdb']?.toString();
+        runtime = movie['runtime'] as int?;
+      } else if (type == 'episode' && episode != null && show != null) {
+        title = episode['title'] as String? ?? show['title'] as String? ?? 'Unknown';
+        final episodeIds = episode['ids'] as Map<String, dynamic>?;
+        final showIds = show['ids'] as Map<String, dynamic>?;
+        imdbId = showIds?['imdb'] as String?;
+        tmdbId = showIds?['tmdb']?.toString();
+        seasonNumber = episode['season'] as int?;
+        episodeNumber = episode['number'] as int?;
+        runtime = episode['runtime'] as int?;
+      } else {
+        return null; // Skip invalid items
+      }
+
+      // Check if item already exists before upserting
+      final existingItem = await _database.getWatchHistoryByTraktId(traktId);
+      final isNew = existingItem == null;
+
+      // Upsert watch history
+      await _database.upsertWatchHistory(
+        WatchHistoryCompanion.insert(
+          traktId: traktId,
+          type: type,
+          title: title,
+          imdbId: Value(imdbId),
+          tmdbId: Value(tmdbId),
+          seasonNumber: Value(seasonNumber),
+          episodeNumber: Value(episodeNumber),
+          progress: progress,
+          watchedAt: watchedAt,
+          pausedAt: Value(pausedAt),
+          runtime: Value(runtime),
+          lastSyncedAt: now,
+          createdAt: now,
+        ),
+      );
+
+      return {'isNew': isNew};
+    } catch (e) {
+      debugPrint('Error processing progress item: $e');
+      return null;
+    }
+  }
+  
+  /// Process a single history item (helper method for parallel processing)
+  Future<Map<String, dynamic>?> _processHistoryItem({
+    required TraktHistoryItem item,
+    required Set<String> traktIdsFromResponse,
+    required DateTime now,
+  }) async {
+    try {
+      // History items represent completed watches (scrobbles)
+      final traktId = _extractTraktIdFromHistory(item);
+      traktIdsFromResponse.add(traktId); // Track for deletion detection
+      
+      final type = item.type;
+      final watchedAt = item.watchedAt;
+      final action = item.action;
+
+      // Only process 'watch' or 'scrobble' actions (not 'checkin')
+      if (action != 'watch' && action != 'scrobble') {
+        return null;
+      }
+
+      String title;
+      String? imdbId;
+      String? tmdbId;
+      int? seasonNumber;
+      int? episodeNumber;
+      int? runtime;
+      double progress = 100.0; // History items are completed watches
+
+      if (type == 'movie' && item.movie != null) {
+        final movie = item.movie!;
+        title = movie.title;
+        final ids = movie.ids;
+        imdbId = ids.imdb;
+        tmdbId = ids.tmdb?.toString();
+        // Note: movie runtime not available in history API
+      } else if (type == 'episode' && item.episode != null && item.show != null) {
+        final episode = item.episode!;
+        final show = item.show!;
+        title = episode.title;
+        final showIds = show.ids;
+        imdbId = showIds.imdb;
+        tmdbId = showIds.tmdb?.toString();
+        seasonNumber = episode.season;
+        episodeNumber = episode.number;
+      } else {
+        return null; // Skip invalid items
+      }
+
+      // Check if item already exists before upserting
+      final existingItem = await _database.getWatchHistoryByTraktId(traktId);
+      final isNew = existingItem == null;
+
+      // Upsert watch history - mark as 100% completed
+      await _database.upsertWatchHistory(
+        WatchHistoryCompanion.insert(
+          traktId: traktId,
+          type: type,
+          title: title,
+          imdbId: Value(imdbId),
+          tmdbId: Value(tmdbId),
+          seasonNumber: Value(seasonNumber),
+          episodeNumber: Value(episodeNumber),
+          progress: progress, // 100% for completed watches
+          watchedAt: watchedAt,
+          pausedAt: const Value.absent(),
+          runtime: Value(runtime),
+          lastSyncedAt: now,
+          createdAt: now,
+        ),
+      );
+
+      return {'isNew': isNew};
+    } catch (e) {
+      debugPrint('Error processing history item: $e');
+      return null;
     }
   }
 

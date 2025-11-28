@@ -583,14 +583,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Row(
                             children: [
                               GhostButton(
-                                onPressed: _syncWatchHistory,
-                                child: _isSyncingWatchHistory
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Text('Resync Watch History'),
+                                onPressed: _isSyncingWatchHistory ? null : _syncWatchHistory,
+                                child: const Text('Resync Watch History'),
                               ),
                               const SizedBox(width: 8),
                               PrimaryButton(
@@ -1232,19 +1226,161 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _isSyncingWatchHistory = true;
     });
 
+    // Show progress dialog with state management
+    final progressController = StreamController<Map<String, dynamic>>();
+    bool isDialogOpen = false;
+
+    void updateProgress(int current, int total, String status) {
+      progressController.add({
+        'current': current,
+        'total': total,
+        'status': status,
+      });
+    }
+
+    void showProgressDialog() {
+      if (!mounted || isDialogOpen) return;
+      isDialogOpen = true;
+      material.showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return material.Dialog(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 400,
+                minWidth: 300,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                  const Text(
+                    'Syncing Watch History',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  StreamBuilder<Map<String, dynamic>>(
+                    stream: progressController.stream,
+                    initialData: {'current': 0, 'total': 100, 'status': 'Starting sync...'},
+                    builder: (context, snapshot) {
+                      final data = snapshot.data ?? {'current': 0, 'total': 100, 'status': 'Starting sync...'};
+                      final current = data['current'] as int? ?? 0;
+                      final total = data['total'] as int? ?? 100;
+                      final status = data['status'] as String? ?? 'Starting sync...';
+                      final progress = total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
+                      
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Progress bar using shadcn Progress component with visible background
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.secondary,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Progress(
+                              progress: (progress * 100).clamp(0, 100),
+                              min: 0,
+                              max: 100,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Status text
+                          Text(
+                            status,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).colorScheme.foreground,
+                            ),
+                          ),
+                          if (total > 0) ...[
+                            const SizedBox(height: 8),
+                            // Progress percentage and count
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${(progress * 100).toStringAsFixed(0)}%',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                                Text(
+                                  '$current / $total items',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.foreground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  // Cancel button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      GhostButton(
+                        onPressed: () {
+                          ServiceLocator.instance.watchHistoryService.cancelSync();
+                          Navigator.of(context).pop();
+                          isDialogOpen = false;
+                          progressController.close();
+                        },
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            ),
+          );
+        },
+      );
+    }
+
     try {
       final watchHistoryService = ServiceLocator.instance.watchHistoryService;
       final database = ServiceLocator.instance.database;
 
+      // Show progress dialog
+      showProgressDialog();
+
       // Clear all existing watch history first
+      updateProgress(0, 100, 'Clearing existing history...');
+      await Future.delayed(const Duration(milliseconds: 50));
+      
       await database.clearWatchHistory();
       
       // Also clear the last sync timestamp to force a completely fresh sync from scratch
       // This ensures we get all history, not just recent changes if any timestamp remained
       await database.deleteSetting('last_trakt_sync');
 
-      // Then sync fresh data from Trakt
-      final syncedCount = await watchHistoryService.syncWatchHistory(forceRefresh: true);
+      // Then sync fresh data from Trakt with progress callback
+      final syncedCount = await watchHistoryService.syncWatchHistory(
+        forceRefresh: true,
+        onProgress: updateProgress,
+      );
+
+      // Close progress dialog
+      if (mounted && isDialogOpen) {
+        progressController.close();
+        Navigator.of(context).pop();
+        isDialogOpen = false;
+      }
 
       if (mounted) {
         showToast(
@@ -1258,6 +1394,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } catch (e) {
+      // Close progress dialog if open
+      if (mounted && isDialogOpen) {
+        progressController.close();
+        Navigator.of(context).pop();
+        isDialogOpen = false;
+      }
+      
       if (mounted) {
         showToast(
           context: context,
