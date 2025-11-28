@@ -304,30 +304,25 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
 
     if (_isLoading) {
       // Show skeleton placeholders while loading
-      return RefreshTrigger(
-        onRefresh: () async {
-          // Don't allow refresh while initially loading
-        },
-        child: CustomScrollView(
-          slivers: [
-            // Hero Section Skeleton
-            const _HeroSectionSkeleton(),
+      return CustomScrollView(
+        slivers: [
+          // Hero Section Skeleton
+          const _HeroSectionSkeleton(),
 
-            // Continue Watching Section Skeleton
-            const _ContinueWatchingSectionSkeleton(),
+          // Continue Watching Section Skeleton
+          const _ContinueWatchingSectionSkeleton(),
 
-            // Catalog Sections Skeleton
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final titles = ['Popular Movies', 'Trending TV Shows', 'New Releases', 'Top Rated'];
-                  return _CatalogSectionSkeleton(title: titles[index % titles.length]);
-                },
-                childCount: 3, // Show 3 skeleton sections
-              ),
+          // Catalog Sections Skeleton
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final titles = ['Popular Movies', 'Trending TV Shows', 'New Releases', 'Top Rated'];
+                return _CatalogSectionSkeleton(title: titles[index % titles.length]);
+              },
+              childCount: 3, // Show 3 skeleton sections
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -385,47 +380,38 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
       return _buildSearchResults();
     }
 
-    return RefreshTrigger(
-      onRefresh: () async {
-        // Force refresh by resetting cache flags
-        _hasLoadedInitialData = false;
-        _lastLoadTime = null;
-        await _loadCatalogs();
-        await _loadContinueWatching();
-      },
-      child: CustomScrollView(
-        slivers: [
-          // Hero Section
-          if (_heroItems.isNotEmpty)
-            _HeroSection(
-              items: _heroItems,
-              enableNavigation: _areCatalogsLoaded,
-            ),
-          
-          // Continue Watching Section
-          if (_continueWatchingItems.isNotEmpty)
-            SliverToBoxAdapter(
-              child: _ContinueWatchingSection(
-                items: _continueWatchingItems,
-              ),
-            ),
-          
-          // Catalog Sections
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final section = _catalogSections[index];
-                return _CatalogSection(
-                  title: section.title,
-                  addonName: section.addonName,
-                  items: section.items,
-                );
-              },
-              childCount: _catalogSections.length,
+    return CustomScrollView(
+      slivers: [
+        // Hero Section
+        if (_heroItems.isNotEmpty)
+          _HeroSection(
+            items: _heroItems,
+            enableNavigation: _areCatalogsLoaded,
+          ),
+        
+        // Continue Watching Section
+        if (_continueWatchingItems.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _ContinueWatchingSection(
+              items: _continueWatchingItems,
             ),
           ),
-        ],
-      ),
+        
+        // Catalog Sections
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final section = _catalogSections[index];
+              return _CatalogSection(
+                title: section.title,
+                addonName: section.addonName,
+                items: section.items,
+              );
+            },
+            childCount: _catalogSections.length,
+          ),
+        ),
+      ],
     );
   }
 
