@@ -83,6 +83,12 @@ class FvpPlayerController {
         _handlePlayerState(newState);
       });
 
+      // Set up media status listener for buffering detection
+      _player!.onMediaStatus((oldStatus, newStatus) {
+        _handleMediaStatus(oldStatus, newStatus);
+        return true; // Allow continuation
+      });
+
       // Set up texture ID listener
       _textureIdListener = () {
         final newTextureId = _player!.textureId.value;
@@ -99,15 +105,41 @@ class FvpPlayerController {
       _player!.media = streamUrl;
 
       // Prepare the media (loads and decodes first frame)
-      await _player!.prepare();
+      // prepare() returns the result position, negative means failed
+      final prepareResult = await _player!.prepare();
+      if (prepareResult < 0) {
+        throw Exception('Failed to prepare media (error code: $prepareResult)');
+      }
+      
+      if (kDebugMode) {
+        debugPrint('FVP: Media prepared at position: $prepareResult');
+      }
 
       // Wait for initialization (mediaInfo available)
       await _waitForInitialization();
 
-      // Update texture (creates texture when media is loaded)
-      if (_isInitialized) {
-        await _player!.updateTexture();
+      // Wait for media to be loaded (MediaStatus.loaded)
+      await _waitForMediaLoaded();
+
+      // Create/update texture after media is loaded
+      // This ensures texture has valid dimensions
+      await _player!.updateTexture();
+      _textureId = _player!.textureId.value;
+      
+      // Wait a bit more for texture to be ready if needed
+      int textureWaitAttempts = 0;
+      while (_textureId == null && textureWaitAttempts < 10) {
+        await Future.delayed(const Duration(milliseconds: 50));
         _textureId = _player!.textureId.value;
+        textureWaitAttempts++;
+      }
+
+      if (kDebugMode) {
+        if (_textureId != null) {
+          debugPrint('FVP: Texture initialized with ID: $_textureId');
+        } else {
+          debugPrint('FVP: Warning - Texture ID is still null after waiting');
+        }
       }
 
       // Get aspect ratio from media info
@@ -123,8 +155,14 @@ class FvpPlayerController {
       _playingController.add(_isPlaying);
       _initializedController.add(_isInitialized);
 
+      // Give the player a moment to start
+      await Future.delayed(const Duration(milliseconds: 100));
+
       if (kDebugMode) {
+        final currentState = _player!.state;
+        final currentStatus = _player!.mediaStatus;
         debugPrint('FVP: Playback started with texture ID: $_textureId');
+        debugPrint('FVP: Current state: $currentState, status: $currentStatus');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -156,42 +194,78 @@ class FvpPlayerController {
     }
   }
 
-  void _handlePlayerState(fvp.PlaybackState state) {
-    final wasBuffering = _isBuffering;
+  Future<void> _waitForMediaLoaded() async {
+    // Wait for media to be loaded (MediaStatus.loaded or MediaStatus.prepared)
+    // This ensures the player is ready for playback
+    int attempts = 0;
+    const maxAttempts = 100; // 10 seconds max wait
+    while (attempts < maxAttempts) {
+      if (_player != null) {
+        final status = _player!.mediaStatus;
+        if (status.test(fvp.MediaStatus.loaded) || status.test(fvp.MediaStatus.prepared)) {
+          if (kDebugMode) {
+            debugPrint('FVP: Media loaded successfully (status: $status)');
+          }
+          return;
+        }
+        if (kDebugMode && attempts % 10 == 0) {
+          debugPrint('FVP: Waiting for media to load... (attempt $attempts, status: $status)');
+        }
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+      attempts++;
+    }
+    
+    if (kDebugMode) {
+      final finalStatus = _player?.mediaStatus;
+      debugPrint('FVP: Warning - MediaStatus.loaded not reached after wait (final status: $finalStatus)');
+    }
+  }
 
+  void _handlePlayerState(fvp.PlaybackState state) {
     switch (state) {
       case fvp.PlaybackState.playing:
         _isPlaying = true;
         _isPaused = false;
-        _isBuffering = false;
         break;
       case fvp.PlaybackState.paused:
         _isPlaying = false;
         _isPaused = true;
-        _isBuffering = false;
         break;
       case fvp.PlaybackState.running:
         // Running is like playing
         _isPlaying = true;
         _isPaused = false;
-        _isBuffering = false;
         break;
       case fvp.PlaybackState.stopped:
         _isPlaying = false;
         _isPaused = true;
-        _isBuffering = false;
         break;
       case fvp.PlaybackState.notRunning:
         _isPlaying = false;
         _isPaused = true;
-        _isBuffering = false;
         break;
     }
 
     _playingController.add(_isPlaying);
+  }
+
+  void _handleMediaStatus(fvp.MediaStatus oldStatus, fvp.MediaStatus newStatus) {
+    final wasBuffering = _isBuffering;
+
+    // Buffering is detected via MediaStatus, not PlaybackState
+    // Check for buffering, stalled, or loading states
+    final isCurrentlyBuffering = newStatus.test(fvp.MediaStatus.buffering) ||
+        newStatus.test(fvp.MediaStatus.stalled) ||
+        (newStatus.test(fvp.MediaStatus.loading) && !newStatus.test(fvp.MediaStatus.loaded));
+
+    _isBuffering = isCurrentlyBuffering;
 
     if (_isBuffering != wasBuffering) {
       _bufferingController.add(_isBuffering);
+      if (kDebugMode) {
+        debugPrint('FVP: Buffering state changed: $_isBuffering (status: $newStatus)');
+      }
     }
   }
 
@@ -315,6 +389,7 @@ class FvpPlayerController {
         _textureIdListener = null;
       }
       _player!.onStateChanged(null);
+      _player!.onMediaStatus(null);
       _player!.dispose();
       _player = null;
     }
