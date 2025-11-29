@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
-import 'package:video_player/video_player.dart';
 import '../logic/fvp_player_controller.dart';
 import '../../../core/widgets/back_button_overlay.dart';
 import '../../../core/services/service_locator.dart';
@@ -58,6 +57,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final TraktContentData _traktContentData;
   Timer? _traktScrobbleTimer;
   bool _hasStartedTraktScrobble = false;
+  int _selectedAudioTrackIndex = 0; // Currently selected audio track
 
   @override
   void initState() {
@@ -325,22 +325,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           alignment: Alignment.center,
           children: [
             // 1. Video player (bottom layer)
-            _controller.videoController != null
-                ? ValueListenableBuilder<VideoPlayerValue>(
-                    valueListenable: _controller.videoController!,
-                    builder: (context, value, child) {
-                      if (value.isInitialized) {
-                        return Center(
-                          child: AspectRatio(
-                            aspectRatio: value.aspectRatio,
-                            child: VideoPlayer(_controller.videoController!),
-                          ),
-                        );
-                      }
-                      return const Center(child: CircularProgressIndicator());
-                    },
-                  )
-                : const Center(child: CircularProgressIndicator()),
+            StreamBuilder<bool>(
+              stream: _controller.initializedStream,
+              initialData: false,
+              builder: (context, initializedSnapshot) {
+                final isInitialized = initializedSnapshot.data ?? false;
+                final textureId = _controller.textureId;
+                
+                if (!isInitialized || textureId == null) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                return StreamBuilder<double?>(
+                  stream: _controller.aspectRatioStream,
+                  initialData: _controller.aspectRatio,
+                  builder: (context, aspectRatioSnapshot) {
+                    final aspectRatio = aspectRatioSnapshot.data ?? 16 / 9;
+                    return Center(
+                      child: AspectRatio(
+                        aspectRatio: aspectRatio,
+                        child: Texture(
+                          textureId: textureId,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
 
             // 2. Info card / Paused overlay (middle layer - only when paused)
             StreamBuilder<bool>(
@@ -418,6 +431,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildAudioSelectionPopover(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Get audio tracks from video controller if available
+    // For now, we'll use a default track since video_player doesn't expose tracks directly
+    final audioTracks = _getAudioTracks();
+    
     return ModalContainer(
       child: SizedBox(
         width: 300,
@@ -426,12 +445,87 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('Audio Track').large().medium(),
-            const Gap(8),
-            const Text('Audio track selection will be available here.').muted(),
+            const Gap(16),
+            if (audioTracks.isEmpty)
+              const Text('No audio tracks available.').muted()
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: audioTracks.length,
+                  itemBuilder: (context, index) {
+                    final isSelected = index == _selectedAudioTrackIndex;
+                    return Clickable(
+                      onPressed: () {
+                        setState(() {
+                          _selectedAudioTrackIndex = index;
+                        });
+                        // TODO: Implement actual audio track switching
+                        // _controller.setAudioTrack(index);
+                        closeOverlay(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    audioTracks[index]['name'] ?? 'Track ${index + 1}',
+                                    style: TextStyle(
+                                      color: colorScheme.foreground,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                  if (audioTracks[index]['language'] != null)
+                                    Text(
+                                      audioTracks[index]['language']!,
+                                      style: TextStyle(
+                                        color: colorScheme.foreground.withValues(alpha: 0.7),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                color: colorScheme.primary,
+                                size: 20,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  List<Map<String, String>> _getAudioTracks() {
+    // TODO: Extract actual audio tracks from video file using fvp.Player
+    // This will be implemented in a follow-up task after the foundation is complete
+    // For now, return a default track if player is initialized
+    if (_controller.isInitialized) {
+      // Return at least one default track
+      return [
+        {'name': 'Default Audio', 'language': 'Auto'},
+      ];
+    }
+    return [];
   }
 
   Widget _buildSubtitleSelectionPopover(BuildContext context) {
@@ -729,42 +823,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           const SizedBox(width: 20),
                           // Show loading indicator when buffering or not initialized, otherwise show play/pause button
-                          _controller.videoController != null
-                              ? ValueListenableBuilder<VideoPlayerValue>(
-                                  valueListenable: _controller.videoController!,
-                                  builder: (context, value, child) {
-                                    final isBuffering = value.isBuffering;
-                                    final isInitialized = value.isInitialized;
-                                    // Show loading indicator when buffering or not initialized
-                                    if (isBuffering || !isInitialized) {
-                                      return IconButton(
-                                        variance: ButtonVariance.ghost,
-                                        icon: ColorFiltered(
-                                          colorFilter: ColorFilter.mode(
-                                            colorScheme.foreground,
-                                            BlendMode.srcIn,
-                                          ),
-                                          child: CircularProgressIndicator(
-                                            size: 48,
-                                          ),
-                                        ),
-                                        onPressed: null,
-                                      );
-                                    }
-                                    return IconButton(
-                                      variance: ButtonVariance.ghost,
-                                      icon: Icon(
-                                          isPlaying ? Icons.pause : Icons.play_arrow,
-                                          color: colorScheme.foreground,
-                                          size: 48),
-                                      onPressed: () {
-                                        _controller.togglePlayPause();
-                                        _onControlInteraction();
-                                      },
-                                    );
-                                  },
-                                )
-                              : IconButton(
+                          StreamBuilder<bool>(
+                            stream: _controller.bufferingStream,
+                            initialData: _controller.isBuffering,
+                            builder: (context, bufferingSnapshot) {
+                              final isBuffering = bufferingSnapshot.data ?? false;
+                              final isInitialized = _controller.isInitialized;
+                              // Show loading indicator when buffering or not initialized
+                              if (isBuffering || !isInitialized) {
+                                return IconButton(
                                   variance: ButtonVariance.ghost,
                                   icon: ColorFiltered(
                                     colorFilter: ColorFilter.mode(
@@ -776,7 +843,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     ),
                                   ),
                                   onPressed: null,
-                                ),
+                                );
+                              }
+                              return IconButton(
+                                variance: ButtonVariance.ghost,
+                                icon: Icon(
+                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                                    color: colorScheme.foreground,
+                                    size: 48),
+                                onPressed: () {
+                                  _controller.togglePlayPause();
+                                  _onControlInteraction();
+                                },
+                              );
+                            },
+                          ),
                           const SizedBox(width: 20),
                           IconButton(
                             variance: ButtonVariance.ghost,

@@ -1,39 +1,57 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:video_player/video_player.dart';
+import 'package:fvp/mdk.dart' as fvp;
 import '../../../core/services/torrent_service.dart';
 import '../../../core/services/service_locator.dart';
 
-/// Controller for video playback using FVP (FFmpeg-based)
+/// Controller for video playback using FVP (FFmpeg-based) with Texture widget
 class FvpPlayerController {
-  VideoPlayerController? _controller;
+  fvp.Player? _player;
+  int? _textureId;
   final TorrentService _torrentService;
   Timer? _positionUpdateTimer;
+  VoidCallback? _textureIdListener;
 
   FvpPlayerController({TorrentService? torrentService})
       : _torrentService = torrentService ?? ServiceLocator.instance.torrentService;
-  
+
   bool _isPlaying = false;
   bool _isPaused = false;
+  bool _isInitialized = false;
+  bool _isBuffering = false;
   double _position = 0.0;
   double _duration = 0.0;
   double _volume = 100.0;
-  
+  double? _aspectRatio;
+
   final StreamController<bool> _playingController = StreamController<bool>.broadcast();
   final StreamController<double> _positionController = StreamController<double>.broadcast();
   final StreamController<double> _volumeController = StreamController<double>.broadcast();
-  
+  final StreamController<bool> _initializedController = StreamController<bool>.broadcast();
+  final StreamController<bool> _bufferingController = StreamController<bool>.broadcast();
+  final StreamController<double?> _aspectRatioController = StreamController<double?>.broadcast();
+
   Stream<bool> get playingStream => _playingController.stream;
   Stream<double> get positionStream => _positionController.stream;
   Stream<double> get volumeStream => _volumeController.stream;
-  
+  Stream<bool> get initializedStream => _initializedController.stream;
+  Stream<bool> get bufferingStream => _bufferingController.stream;
+  Stream<double?> get aspectRatioStream => _aspectRatioController.stream;
+
   bool get isPlaying => _isPlaying;
   bool get isPaused => _isPaused;
+  bool get isInitialized => _isInitialized;
+  bool get isBuffering => _isBuffering;
   double get position => _position;
   double get duration => _duration;
   double get volume => _volume;
-  
-  VideoPlayerController? get videoController => _controller;
+  int? get textureId => _textureId;
+  double? get aspectRatio => _aspectRatio;
+
+  // Deprecated - kept for backward compatibility but will be removed
+  // The screen should use textureId and StreamBuilders instead
+  @Deprecated('Use textureId and StreamBuilders instead')
+  dynamic get videoController => null;
 
   Future<void> start(String url, {List<String>? subtitles}) async {
     try {
@@ -41,9 +59,9 @@ class FvpPlayerController {
         debugPrint('FVP: Starting playback of $url');
       }
 
-      // Dispose previous controller if exists
-      await _controller?.dispose();
-      
+      // Dispose previous player if exists
+      await _disposePlayer();
+
       String streamUrl = url;
 
       // Handle magnet URLs by using torrent service
@@ -57,28 +75,56 @@ class FvpPlayerController {
         }
       }
 
-      _controller = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
-      
-      await _controller!.initialize();
-      
-      // Set up listeners
-      _controller!.addListener(_updateState);
-      
+      // Create new player instance
+      _player = fvp.Player();
+
+      // Set up state change listener
+      _player!.onStateChanged((oldState, newState) {
+        _handlePlayerState(newState);
+      });
+
+      // Set up texture ID listener
+      _textureIdListener = () {
+        final newTextureId = _player!.textureId.value;
+        if (newTextureId != null && newTextureId != _textureId) {
+          _textureId = newTextureId;
+        }
+      };
+      _player!.textureId.addListener(_textureIdListener!);
+
       // Set initial volume
-      await _controller!.setVolume(_volume / 100.0);
-      
+      _player!.volume = _volume / 100.0;
+
+      // Set media URL
+      _player!.media = streamUrl;
+
+      // Prepare the media (loads and decodes first frame)
+      await _player!.prepare();
+
+      // Wait for initialization (mediaInfo available)
+      await _waitForInitialization();
+
+      // Update texture (creates texture when media is loaded)
+      if (_isInitialized) {
+        await _player!.updateTexture();
+        _textureId = _player!.textureId.value;
+      }
+
+      // Get aspect ratio from media info
+      _updateAspectRatio();
+
       // Start position updates
       _startPositionUpdates();
-      
+
       // Start playing
-      await _controller!.play();
-      
+      _player!.state = fvp.PlaybackState.playing;
       _isPlaying = true;
       _isPaused = false;
       _playingController.add(_isPlaying);
-      
+      _initializedController.add(_isInitialized);
+
       if (kDebugMode) {
-        debugPrint('FVP: Playback started');
+        debugPrint('FVP: Playback started with texture ID: $_textureId');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -88,40 +134,136 @@ class FvpPlayerController {
     }
   }
 
-  void _updateState() {
-    if (_controller == null || !_controller!.value.isInitialized) return;
-    
-    final value = _controller!.value;
-    _duration = value.duration.inSeconds.toDouble();
-    _position = value.position.inSeconds.toDouble();
-    _isPlaying = value.isPlaying;
-    _isPaused = !value.isPlaying;
-    
-    _positionController.add(_position);
+  Future<void> _waitForInitialization() async {
+    // Wait for player to be initialized (media info available)
+    int attempts = 0;
+    const maxAttempts = 50; // 5 seconds max wait
+    while (attempts < maxAttempts) {
+      if (_player?.mediaInfo.video != null && _player!.mediaInfo.video!.isNotEmpty) {
+        _isInitialized = true;
+        break;
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+      attempts++;
+    }
+
+    if (!_isInitialized) {
+      // If still not initialized, set a default
+      _isInitialized = true; // Assume initialized anyway
+      if (kDebugMode) {
+        debugPrint('FVP: Warning - mediaInfo not available after wait');
+      }
+    }
+  }
+
+  void _handlePlayerState(fvp.PlaybackState state) {
+    final wasBuffering = _isBuffering;
+
+    switch (state) {
+      case fvp.PlaybackState.playing:
+        _isPlaying = true;
+        _isPaused = false;
+        _isBuffering = false;
+        break;
+      case fvp.PlaybackState.paused:
+        _isPlaying = false;
+        _isPaused = true;
+        _isBuffering = false;
+        break;
+      case fvp.PlaybackState.running:
+        // Running is like playing
+        _isPlaying = true;
+        _isPaused = false;
+        _isBuffering = false;
+        break;
+      case fvp.PlaybackState.stopped:
+        _isPlaying = false;
+        _isPaused = true;
+        _isBuffering = false;
+        break;
+      case fvp.PlaybackState.notRunning:
+        _isPlaying = false;
+        _isPaused = true;
+        _isBuffering = false;
+        break;
+    }
+
     _playingController.add(_isPlaying);
+
+    if (_isBuffering != wasBuffering) {
+      _bufferingController.add(_isBuffering);
+    }
+  }
+
+  void _updateAspectRatio() {
+    final videoInfo = _player?.mediaInfo.video;
+    if (videoInfo != null && videoInfo.isNotEmpty) {
+      final firstVideo = videoInfo.first;
+      if (firstVideo.codec.width > 0 && firstVideo.codec.height > 0) {
+        _aspectRatio = firstVideo.codec.width / firstVideo.codec.height;
+        _aspectRatioController.add(_aspectRatio);
+        if (kDebugMode) {
+          debugPrint('FVP: Aspect ratio updated: $_aspectRatio');
+        }
+      }
+    }
+    
+    if (_aspectRatio == null) {
+      // Default to 16:9 if not available
+      _aspectRatio = 16 / 9;
+      _aspectRatioController.add(_aspectRatio);
+    }
   }
 
   void _startPositionUpdates() {
     _positionUpdateTimer?.cancel();
     _positionUpdateTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (_controller == null || !_controller!.value.isInitialized) {
+      if (_player == null || !_isInitialized) {
         timer.cancel();
         return;
       }
-      _updateState();
+
+      try {
+        // Position is in milliseconds
+        final currentPosition = _player!.position;
+        _position = currentPosition / 1000.0; // Convert to seconds
+        _positionController.add(_position);
+
+        // Get duration from mediaInfo if available
+        final videoInfo = _player!.mediaInfo.video;
+        if (videoInfo != null && videoInfo.isNotEmpty) {
+          final firstVideo = videoInfo.first;
+          if (firstVideo.duration > 0) {
+            final newDuration = firstVideo.duration / 1000.0; // Convert milliseconds to seconds
+            if (newDuration != _duration) {
+              _duration = newDuration;
+            }
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('FVP: Error updating position: $e');
+        }
+      }
     });
   }
 
   Future<void> pause() async {
-    await _controller?.pause();
-    _isPaused = true;
-    _playingController.add(false);
+    if (_player != null) {
+      _player!.state = fvp.PlaybackState.paused;
+      _isPaused = true;
+      _isPlaying = false;
+      _playingController.add(false);
+    }
   }
 
   Future<void> resume() async {
-    await _controller?.play();
-    _isPaused = false;
-    _playingController.add(true);
+    if (_player != null) {
+      _player!.state = fvp.PlaybackState.playing;
+      _isPaused = false;
+      _isPlaying = true;
+      _playingController.add(true);
+    }
   }
 
   Future<void> togglePlayPause() async {
@@ -133,14 +275,19 @@ class FvpPlayerController {
   }
 
   Future<void> seek(double seconds) async {
-    await _controller?.seekTo(Duration(seconds: seconds.toInt()));
-    _position = seconds;
-    _positionController.add(_position);
+    if (_player != null) {
+      final positionMs = (seconds * 1000).toInt();
+      await _player!.seek(position: positionMs);
+      _position = seconds;
+      _positionController.add(_position);
+    }
   }
 
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 100.0);
-    await _controller?.setVolume(_volume / 100.0);
+    if (_player != null) {
+      _player!.volume = _volume / 100.0;
+    }
     _volumeController.add(_volume);
   }
 
@@ -148,14 +295,34 @@ class FvpPlayerController {
     _positionUpdateTimer?.cancel();
     _positionUpdateTimer = null;
 
-    await _controller?.pause();
-    await _controller?.dispose();
-    _controller = null;
+    if (_player != null) {
+      _player!.state = fvp.PlaybackState.stopped;
+    }
+    
+    await _disposePlayer();
+    
     _isPlaying = false;
     _isPaused = false;
+    _isBuffering = false;
+    _isInitialized = false;
     _playingController.add(false);
   }
 
+  Future<void> _disposePlayer() async {
+    if (_player != null) {
+      if (_textureIdListener != null) {
+        _player!.textureId.removeListener(_textureIdListener!);
+        _textureIdListener = null;
+      }
+      _player!.onStateChanged(null);
+      _player!.dispose();
+      _player = null;
+    }
+    
+    _textureId = null;
+    _aspectRatio = null;
+    _aspectRatioController.add(null);
+  }
 
   void dispose() {
     _positionUpdateTimer?.cancel();
@@ -163,13 +330,8 @@ class FvpPlayerController {
     _playingController.close();
     _positionController.close();
     _volumeController.close();
+    _initializedController.close();
+    _bufferingController.close();
+    _aspectRatioController.close();
   }
 }
-
-
-
-
-
-
-
-
