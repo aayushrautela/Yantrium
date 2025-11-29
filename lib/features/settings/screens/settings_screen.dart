@@ -95,6 +95,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSyncingWatchHistory = false;
   String? _accentColor;
   bool _isLoadingAccentColor = true;
+  String? _defaultAudioLanguage;
+  String? _defaultSubtitleLanguage;
+  bool _isLoadingPlayerSettings = true;
 
   @override
   void initState() {
@@ -106,6 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadCatalogs();
     _checkTraktAuth();
     _loadAccentColor();
+    _loadPlayerSettings();
   }
 
   Future<void> _loadAccentColor() async {
@@ -124,6 +128,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() {
         _accentColor = color;
+      });
+    }
+  }
+
+  Future<void> _loadPlayerSettings() async {
+    final audioLang = await _database.getSettingValue('default_audio_language');
+    final subtitleLang = await _database.getSettingValue('default_subtitle_language');
+    if (mounted) {
+      setState(() {
+        _defaultAudioLanguage = audioLang ?? 'en'; // Default to English
+        _defaultSubtitleLanguage = subtitleLang ?? 'en'; // Default to English
+        _isLoadingPlayerSettings = false;
+      });
+    }
+  }
+
+  Future<void> _setDefaultAudioLanguage(String language) async {
+    await _database.setSetting('default_audio_language', language);
+    if (mounted) {
+      setState(() {
+        _defaultAudioLanguage = language;
+      });
+    }
+  }
+
+  Future<void> _setDefaultSubtitleLanguage(String language) async {
+    await _database.setSetting('default_subtitle_language', language);
+    if (mounted) {
+      setState(() {
+        _defaultSubtitleLanguage = language;
       });
     }
   }
@@ -644,10 +678,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'Player Settings',
             icon: Icons.play_circle_outline,
           ),
-          Padding(
-            padding: AppConstants.contentPadding,
-            child: const Text('Player settings will be available here.').muted(),
-          ),
+          if (_isLoadingPlayerSettings)
+            Padding(
+              padding: AppConstants.contentPadding,
+              child: const LoadingIndicator(message: 'Loading player settings...'),
+            )
+          else
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.horizontalMargin,
+              ),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  // Default Audio Language Card
+                  SizedBox(
+                    width: 400,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Default Audio Language').h4(),
+                                      const SizedBox(height: 4),
+                                      const Text('Preferred audio language for playback').muted(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _LanguageSelect(
+                              selectedLanguage: _defaultAudioLanguage ?? 'en',
+                              onLanguageSelected: _setDefaultAudioLanguage,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Default Subtitle Language Card
+                  SizedBox(
+                    width: 400,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Default Subtitle Language').h4(),
+                                      const SizedBox(height: 4),
+                                      const Text('Preferred subtitle language for playback').muted(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _LanguageSelect(
+                              selectedLanguage: _defaultSubtitleLanguage ?? 'en',
+                              onLanguageSelected: _setDefaultSubtitleLanguage,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: AppConstants.sectionSpacing),
 
           // About Section
@@ -1531,6 +1644,125 @@ class _AccentColorPicker extends StatelessWidget {
     // Calculate relative luminance
     final luminance = (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
     return luminance > 0.5 ? const material.Color(0xFF000000) : const material.Color(0xFFFFFFFF);
+  }
+}
+
+/// Language select widget using shadcn-styled Select component
+class _LanguageSelect extends StatefulWidget {
+  final String selectedLanguage;
+  final Function(String) onLanguageSelected;
+
+  const _LanguageSelect({
+    required this.selectedLanguage,
+    required this.onLanguageSelected,
+  });
+
+  @override
+  State<_LanguageSelect> createState() => _LanguageSelectState();
+}
+
+class _LanguageSelectState extends State<_LanguageSelect> {
+  // Full list of common languages
+  static const List<Map<String, String>> _languages = [
+    {'code': 'en', 'name': 'English'},
+    {'code': 'es', 'name': 'Spanish'},
+    {'code': 'fr', 'name': 'French'},
+    {'code': 'de', 'name': 'German'},
+    {'code': 'it', 'name': 'Italian'},
+    {'code': 'pt', 'name': 'Portuguese'},
+    {'code': 'ru', 'name': 'Russian'},
+    {'code': 'ja', 'name': 'Japanese'},
+    {'code': 'ko', 'name': 'Korean'},
+    {'code': 'zh', 'name': 'Chinese'},
+    {'code': 'ar', 'name': 'Arabic'},
+    {'code': 'hi', 'name': 'Hindi'},
+    {'code': 'nl', 'name': 'Dutch'},
+    {'code': 'pl', 'name': 'Polish'},
+    {'code': 'tr', 'name': 'Turkish'},
+    {'code': 'sv', 'name': 'Swedish'},
+    {'code': 'da', 'name': 'Danish'},
+    {'code': 'no', 'name': 'Norwegian'},
+    {'code': 'fi', 'name': 'Finnish'},
+    {'code': 'cs', 'name': 'Czech'},
+    {'code': 'hu', 'name': 'Hungarian'},
+    {'code': 'ro', 'name': 'Romanian'},
+    {'code': 'th', 'name': 'Thai'},
+    {'code': 'vi', 'name': 'Vietnamese'},
+  ];
+
+  String _getLanguageName(String code) {
+    return _languages.firstWhere(
+      (lang) => lang['code'] == code,
+      orElse: () => {'code': code, 'name': code.toUpperCase()},
+    )['name']!;
+  }
+
+  List<Map<String, String>> _filterLanguages(String? searchQuery) {
+    if (searchQuery == null || searchQuery.isEmpty) {
+      return _languages;
+    }
+    final query = searchQuery.toLowerCase();
+    return _languages
+        .where((lang) => 
+            lang['name']!.toLowerCase().contains(query) ||
+            lang['code']!.toLowerCase().contains(query))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Select<String>(
+      itemBuilder: (context, item) {
+        return Text(_getLanguageName(item));
+      },
+      popup: SelectPopup.builder(
+        searchPlaceholder: const Text('Search language'),
+        emptyBuilder: (context) {
+          return const Center(
+            child: Text('No language found'),
+          );
+        },
+        builder: (context, searchQuery) async {
+          final filteredLanguages = _filterLanguages(searchQuery);
+          
+          return SelectItemBuilder(
+            childCount: filteredLanguages.isEmpty ? 0 : null,
+            builder: (context, index) {
+              final language = filteredLanguages[index % filteredLanguages.length];
+              final isSelected = language['code'] == widget.selectedLanguage;
+              
+              return SelectItemButton(
+                value: language['code']!,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(language['name']!),
+                    ),
+                    if (isSelected)
+                      Icon(
+                        Icons.check,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+      onChanged: (value) {
+        if (value != null) {
+          widget.onLanguageSelected(value);
+        }
+      },
+      constraints: const BoxConstraints(
+        maxHeight: 300,
+        minWidth: 200,
+      ),
+      value: widget.selectedLanguage,
+      placeholder: const Text('Select language'),
+    );
   }
 }
 
