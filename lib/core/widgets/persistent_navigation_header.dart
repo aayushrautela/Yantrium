@@ -58,14 +58,29 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    double navbarHeight;
+    double padding;
+    
+    if (screenWidth >= 3840) { // 4K and above
+      navbarHeight = 100;
+      padding = 28;
+    } else if (screenWidth >= 2560) { // 1440p (2K)
+      navbarHeight = 85;
+      padding = 24;
+    } else { // 1080p and below
+      navbarHeight = 75;
+      padding = 20;
+    }
+    
     return Container(
+      height: navbarHeight,
       padding: EdgeInsets.only(
         left: 24,
         right: AppConstants.horizontalMargin,
-        top: 16,
-        bottom: 16,
+        top: padding,
+        bottom: padding,
       ),
-      constraints: const BoxConstraints(minHeight: 56),
       child: Row(
         children: [
           // Logo
@@ -96,61 +111,59 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
           const Spacer(),
           
           // Search
-          if (widget.currentIndex != 2) ...[
-            SizedBox(
-              width: 300,
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.mutedForeground,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: widget.searchController != null
-                        ? TextField(
-                            key: const ValueKey('search_field'),
-                            controller: widget.searchController,
-                            placeholder: Text(
-                              widget.currentIndex == 1
-                                  ? 'Search library'
-                                  : 'Titles, people, genres',
-                            ),
-                          )
-                        : TextField(
-                            enabled: false,
-                            placeholder: Text(
-                              widget.currentIndex == 1
-                                  ? 'Search library'
-                                  : 'Titles, people, genres',
-                            ),
-                          ),
-                  ),
-                  if (_hasSearchText && widget.searchController != null) ...[
-                    const SizedBox(width: 8),
-                    Clickable(
-                      onPressed: () {
-                        widget.searchController!.clear();
-                        setState(() {
-                          _hasSearchText = false;
-                        });
-                      },
-                      child: Icon(
-                        Icons.clear,
+          SizedBox(
+            width: 300,
+            height: 40,
+            child: widget.currentIndex != 2
+                ? Row(
+                    children: [
+                      Icon(
+                        Icons.search,
                         size: 20,
                         color: Theme.of(context).colorScheme.mutedForeground,
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-          ] else ...[
-            // Placeholder to maintain consistent width when search is hidden
-            SizedBox(width: 300),
-          ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: widget.searchController != null
+                            ? TextField(
+                                key: const ValueKey('search_field'),
+                                controller: widget.searchController,
+                                placeholder: Text(
+                                  widget.currentIndex == 1
+                                      ? 'Search library'
+                                      : 'Titles, people, genres',
+                                ),
+                              )
+                            : TextField(
+                                enabled: false,
+                                placeholder: Text(
+                                  widget.currentIndex == 1
+                                      ? 'Search library'
+                                      : 'Titles, people, genres',
+                                ),
+                              ),
+                      ),
+                      if (_hasSearchText && widget.searchController != null) ...[
+                        const SizedBox(width: 8),
+                        Clickable(
+                          onPressed: () {
+                            widget.searchController!.clear();
+                            setState(() {
+                              _hasSearchText = false;
+                            });
+                          },
+                          child: Icon(
+                            Icons.clear,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 16),
         ],
       ),
     );
