@@ -368,11 +368,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => material.AlertDialog(
+          builder: (context) => AlertDialog(
             title: const Text('Cannot Play Episode'),
             content: const Text('Unable to identify this series. Please try again.'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -415,11 +415,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         if (mounted) {
           showDialog(
             context: context,
-            builder: (context) => material.AlertDialog(
+            builder: (context) => AlertDialog(
               title: const Text('No Streams Available'),
               content: const Text('No streams were found for this episode.'),
               actions: [
-                TextButton(
+                GhostButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('OK'),
                 ),
@@ -481,11 +481,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => material.AlertDialog(
+          builder: (context) => AlertDialog(
             title: const Text('Error'),
             content: Text('Failed to play episode: ${e.toString()}'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -510,11 +510,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => material.AlertDialog(
+          builder: (context) => AlertDialog(
             title: const Text('Cannot Play Episode'),
             content: const Text('Unable to identify this series. Please try again.'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -557,11 +557,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
         if (mounted) {
           showDialog(
             context: context,
-            builder: (context) => material.AlertDialog(
+            builder: (context) => AlertDialog(
               title: const Text('No Streams Available'),
               content: const Text('No streams were found for this episode.'),
               actions: [
-                TextButton(
+                GhostButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('OK'),
                 ),
@@ -623,11 +623,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => material.AlertDialog(
+          builder: (context) => AlertDialog(
             title: const Text('Error'),
             content: Text('Failed to play episode: ${e.toString()}'),
             actions: [
-              TextButton(
+              GhostButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
@@ -687,12 +687,12 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
     }
 
     if (_seasons.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 400,
         child: Center(
           child: Text(
             'No episodes available',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Theme.of(context).colorScheme.foreground),
           ),
         ),
       );
@@ -732,7 +732,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                   color: Theme.of(context)
                       .colorScheme
                       .foreground
-                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                 ),
               ),
             ],
@@ -782,7 +782,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -808,7 +808,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -879,12 +879,12 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       Theme.of(context)
                                           .colorScheme
                                           .background
-                                          .withOpacity(0.6),
-                                      Theme.of(context)
-                                          .colorScheme
-                                          .background
-                                          .withOpacity(0.2),
-                                      Colors.transparent,
+                                          .withValues(alpha: 0.6),
+                                          Theme.of(context)
+                                              .colorScheme
+                                              .background
+                                              .withValues(alpha: 0.2),
+                                      material.Colors.transparent,
                                     ],
                                     stops: const [0.0, 0.15, 0.35, 1.0],
                                   ),
@@ -909,11 +909,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                 colors: [
                                   Theme.of(context).colorScheme.background,
                                   Theme.of(context).colorScheme.background,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.7),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.1),
-                                  Colors.transparent,
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.7),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.1),
+                                  material.Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85],
                               ),
@@ -947,11 +947,11 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       errorBuilder: (context, error, stackTrace) {
                                         return Text(
                                           widget.seriesItem.name.toUpperCase(),
-                                          style: const TextStyle(
-                                            fontSize: 60,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.yellow,
-                                          ),
+                                    style: TextStyle(
+                                      fontSize: 60,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
                                         );
                                       },
                                     ),
@@ -959,10 +959,10 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                 else
                                   Text(
                                     widget.seriesItem.name.toUpperCase(),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 60,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.yellow,
+                                      color: Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
 
@@ -982,7 +982,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.w500,
-                                              color: Colors.white.withOpacity(0.7),
+                                              color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                                             ),
                                           ),
                                           // Duration
@@ -993,7 +993,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                               style: TextStyle(
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.w500,
-                                                color: Colors.white.withOpacity(0.7),
+                                                color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                                               ),
                                             ),
                                           ],
@@ -1005,7 +1005,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                               style: TextStyle(
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.w500,
-                                                color: Colors.white.withOpacity(0.7),
+                                                color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                                               ),
                                             ),
                                           ],
@@ -1014,10 +1014,10 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       const SizedBox(height: 8),
                                       Text(
                                         _currentEpisode.name,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 38,
                                           fontWeight: FontWeight.w600,
-                                          color: Colors.white,
+                                          color: Theme.of(context).colorScheme.foreground,
                                         ),
                                       ),
                                     ],
@@ -1032,10 +1032,10 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                     width: 600,
                                     child: Text(
                                       _currentEpisode.overview!,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 16,
                                         height: 1.5,
-                                        color: Colors.white,
+                                        color: Theme.of(context).colorScheme.foreground,
                                       ),
                                     ),
                                   ),
@@ -1050,7 +1050,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(material.Icons.play_arrow, size: 24),
+                                          Icon(Icons.play_arrow, size: 24),
                                           SizedBox(width: 10),
                                           Text(
                                             'Play',
@@ -1065,7 +1065,7 @@ class _EpisodeDetailScreenState extends State<EpisodeDetailScreen> {
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(material.Icons.add, size: 24),
+                                          Icon(Icons.add, size: 24),
                                           SizedBox(width: 10),
                                           Text(
                                             'My List',
@@ -1225,12 +1225,12 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                         errorBuilder: (context, error, stackTrace) =>
                                             Container(
                                           width: double.infinity,
-                                          color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                          color: Theme.of(context).colorScheme.muted.withValues(alpha: 0.7),
                                         ),
                                       )
                                     : Container(
                                         width: double.infinity,
-                                        color: Theme.of(context).colorScheme.muted.withOpacity(0.7),
+                                        color: Theme.of(context).colorScheme.muted.withValues(alpha: 0.7),
                                       ),
                               ),
                             ),
@@ -1248,7 +1248,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: material.Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1277,7 +1277,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: material.Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1306,7 +1306,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: material.Colors.black.withOpacity(0.4),
+                                    color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1329,7 +1329,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                             child: IgnorePointer(
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
                                 ),
                               ),
                             ),
@@ -1352,9 +1352,9 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                     color: Theme.of(context).colorScheme.primary,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.play_arrow,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.foreground,
                                     size: 40,
                                   ),
                                 ),
@@ -1378,10 +1378,10 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                           // Episode title
                           Text(
                             '${widget.episode.episodeNumber}. ${widget.episode.name}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.foreground,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -1396,7 +1396,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                                 color: Theme.of(context)
                                     .colorScheme
                                     .foreground
-                                    .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                 height: 1.4,
                               ),
                               maxLines: 5,
@@ -1450,49 +1450,50 @@ class _StreamSelectionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return material.Dialog(
-      child: material.Container(
+    return AlertDialog(
+      content: Container(
           width: 500,
-          constraints: const material.BoxConstraints(maxHeight: 600),
-          padding: const material.EdgeInsets.all(24),
-          child: material.Column(
-            mainAxisSize: material.MainAxisSize.min,
-            crossAxisAlignment: material.CrossAxisAlignment.start,
+          constraints: const BoxConstraints(maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              material.Row(
+              Row(
                 children: [
-                  material.Expanded(
+                  Expanded(
                     child: Text(title).h4(),
                   ),
-                  material.IconButton(
-                    icon: const material.Icon(material.Icons.close),
-                    onPressed: () => material.Navigator.of(context).pop(),
+                  IconButton(
+                    variance: ButtonVariance.ghost,
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
-            const material.SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text('${streams.length} stream${streams.length != 1 ? 's' : ''} available').muted(),
-            const material.SizedBox(height: 24),
+            const SizedBox(height: 24),
             
             // Stream list
-            material.Flexible(
+            Flexible(
               child: streams.isEmpty
-                  ? material.Center(
-                      child: material.Column(
-                        mainAxisSize: material.MainAxisSize.min,
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          material.Icon(
-                            material.Icons.video_library_outlined,
+                          Icon(
+                            Icons.video_library_outlined,
                             size: 48,
                             color: Theme.of(context).colorScheme.mutedForeground,
                           ),
-                          const material.SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           const Text('No streams available').muted(),
                         ],
                       ),
                     )
-                  : material.ListView.builder(
+                  : ListView.builder(
                       shrinkWrap: true,
                       itemCount: streams.length,
                       itemBuilder: (context, index) {
@@ -1500,7 +1501,7 @@ class _StreamSelectionDialog extends StatelessWidget {
                         return _StreamItem(
                           stream: stream,
                           displayName: _getStreamDisplayName(stream),
-                          onTap: () => material.Navigator.of(context).pop(stream),
+                          onTap: () => Navigator.of(context).pop(stream),
                         );
                       },
                     ),
@@ -1557,7 +1558,7 @@ class _StreamItemState extends State<_StreamItem> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Icon(
