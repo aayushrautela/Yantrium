@@ -27,16 +27,22 @@ class BackButtonOverlay extends StatelessWidget {
       left: padding?.left ?? 24,
       child: material.Material(
         color: Colors.transparent,
+        elevation: 0,
         child: material.InkWell(
           onTap: callback,
           borderRadius: BorderRadius.circular(24),
           child: Container(
             width: 48,
             height: 48,
+            constraints: const BoxConstraints(
+              minWidth: 48,
+              minHeight: 48,
+            ),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: material.Colors.black.withOpacity(0.5),
             ),
+            alignment: Alignment.center,
             child: const Icon(
               Icons.arrow_back,
               color: Colors.white,
