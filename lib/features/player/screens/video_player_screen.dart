@@ -57,7 +57,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final TraktContentData _traktContentData;
   Timer? _traktScrobbleTimer;
   bool _hasStartedTraktScrobble = false;
-  int _selectedAudioTrackIndex = 0; // Currently selected audio track
 
   @override
   void initState() {
@@ -454,14 +453,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   shrinkWrap: true,
                   itemCount: audioTracks.length,
                   itemBuilder: (context, index) {
-                    final isSelected = index == _selectedAudioTrackIndex;
+                    final track = audioTracks[index];
+                    final isSelected = track.isActive;
                     return Clickable(
                       onPressed: () {
-                        setState(() {
-                          _selectedAudioTrackIndex = index;
-                        });
-                        // TODO: Implement actual audio track switching
-                        // _controller.setAudioTrack(index);
+                        _controller.setAudioTrack(track.index);
                         closeOverlay(context);
                       },
                       child: Container(
@@ -479,18 +475,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    audioTracks[index]['name'] ?? 'Track ${index + 1}',
+                                    audioTracks[index].displayName,
                                     style: TextStyle(
                                       color: colorScheme.foreground,
                                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                     ),
                                   ),
-                                  if (audioTracks[index]['language'] != null)
+                                  if (audioTracks[index].description.isNotEmpty)
                                     Text(
-                                      audioTracks[index]['language']!,
+                                      audioTracks[index].description,
                                       style: TextStyle(
                                         color: colorScheme.foreground.withValues(alpha: 0.7),
                                         fontSize: 12,
+                                      ),
+                                    ),
+                                  if (audioTracks[index].language != 'Unknown')
+                                    Text(
+                                      audioTracks[index].language,
+                                      style: TextStyle(
+                                        color: colorScheme.foreground.withValues(alpha: 0.5),
+                                        fontSize: 11,
                                       ),
                                     ),
                                 ],
@@ -515,20 +519,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  List<Map<String, String>> _getAudioTracks() {
-    // TODO: Extract actual audio tracks from video file using fvp.Player
-    // This will be implemented in a follow-up task after the foundation is complete
-    // For now, return a default track if player is initialized
-    if (_controller.isInitialized) {
-      // Return at least one default track
-      return [
-        {'name': 'Default Audio', 'language': 'Auto'},
-      ];
-    }
-    return [];
+  List<AudioTrackInfo> _getAudioTracks() {
+    return _controller.getAudioTracks();
+  }
+
+  List<SubtitleTrackInfo> _getSubtitleTracks() {
+    return _controller.getSubtitleTracks();
   }
 
   Widget _buildSubtitleSelectionPopover(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final subtitleTracks = _getSubtitleTracks();
+    
     return ModalContainer(
       child: SizedBox(
         width: 300,
@@ -537,8 +539,107 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('Subtitles').large().medium(),
-            const Gap(8),
-            const Text('Subtitle selection will be available here.').muted(),
+            const Gap(16),
+            // Option to disable subtitles
+            Clickable(
+              onPressed: () {
+                _controller.setSubtitleTrack(null);
+                closeOverlay(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _controller.getActiveSubtitleTrackIndex() == null
+                      ? colorScheme.primary.withValues(alpha: 0.1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Off',
+                        style: TextStyle(
+                          color: colorScheme.foreground,
+                          fontWeight: _controller.getActiveSubtitleTrackIndex() == null
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    if (_controller.getActiveSubtitleTrackIndex() == null)
+                      Icon(
+                        Icons.check,
+                        color: colorScheme.primary,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (subtitleTracks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: const Text('No subtitle tracks available.').muted(),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: subtitleTracks.length,
+                  itemBuilder: (context, index) {
+                    final track = subtitleTracks[index];
+                    final isSelected = track.isActive;
+                    return Clickable(
+                      onPressed: () {
+                        _controller.setSubtitleTrack(track.index);
+                        closeOverlay(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colorScheme.primary.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    track.displayName,
+                                    style: TextStyle(
+                                      color: colorScheme.foreground,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                  if (track.codec.isNotEmpty && track.codec != 'Unknown')
+                                    Text(
+                                      track.codec.toUpperCase(),
+                                      style: TextStyle(
+                                        color: colorScheme.foreground.withValues(alpha: 0.7),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                color: colorScheme.primary,
+                                size: 20,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),

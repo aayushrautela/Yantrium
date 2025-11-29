@@ -4,6 +4,75 @@ import 'package:fvp/mdk.dart' as fvp;
 import '../../../core/services/torrent_service.dart';
 import '../../../core/services/service_locator.dart';
 
+/// Information about an audio track
+class AudioTrackInfo {
+  final int index;
+  final String language;
+  final String? title;
+  final String codec;
+  final int channels;
+  final int sampleRate;
+  final bool isActive;
+
+  AudioTrackInfo({
+    required this.index,
+    required this.language,
+    this.title,
+    required this.codec,
+    required this.channels,
+    required this.sampleRate,
+    required this.isActive,
+  });
+
+  String get displayName {
+    if (title != null && title!.isNotEmpty) {
+      return title!;
+    }
+    if (language != 'Unknown') {
+      return '$language (${codec.toUpperCase()})';
+    }
+    return 'Track ${index + 1} (${codec.toUpperCase()})';
+  }
+
+  String get description {
+    final parts = <String>[];
+    if (channels > 0) {
+      parts.add('${channels}ch');
+    }
+    if (sampleRate > 0) {
+      parts.add('${(sampleRate / 1000).toStringAsFixed(1)}kHz');
+    }
+    return parts.join(', ');
+  }
+}
+
+/// Information about a subtitle track
+class SubtitleTrackInfo {
+  final int index;
+  final String language;
+  final String? title;
+  final String codec;
+  final bool isActive;
+
+  SubtitleTrackInfo({
+    required this.index,
+    required this.language,
+    this.title,
+    required this.codec,
+    required this.isActive,
+  });
+
+  String get displayName {
+    if (title != null && title!.isNotEmpty) {
+      return title!;
+    }
+    if (language != 'Unknown') {
+      return language;
+    }
+    return 'Track ${index + 1}';
+  }
+}
+
 /// Controller for video playback using FVP (FFmpeg-based) with Texture widget
 class FvpPlayerController {
   fvp.Player? _player;
@@ -19,6 +88,7 @@ class FvpPlayerController {
   bool _isPaused = false;
   bool _isInitialized = false;
   bool _isBuffering = false;
+  bool _isDisposing = false;
   double _position = 0.0;
   double _duration = 0.0;
   double _volume = 100.0;
@@ -47,6 +117,150 @@ class FvpPlayerController {
   double get volume => _volume;
   int? get textureId => _textureId;
   double? get aspectRatio => _aspectRatio;
+
+  // Audio and subtitle track information
+  List<AudioTrackInfo> getAudioTracks() {
+    if (_player == null || !_isInitialized) {
+      return [];
+    }
+    
+    final audioStreams = _player!.mediaInfo.audio;
+    if (audioStreams == null || audioStreams.isEmpty) {
+      return [];
+    }
+
+    final activeTracks = _player!.activeAudioTracks;
+    final activeIndex = activeTracks.isNotEmpty ? activeTracks.first : -1;
+
+    return audioStreams.map((stream) {
+      final metadata = stream.metadata;
+      final language = metadata['language'] ?? 
+                      metadata['LANGUAGE'] ?? 
+                      metadata['lang'] ?? 
+                      'Unknown';
+      final title = metadata['title'] ?? 
+                   metadata['TITLE'] ?? 
+                   metadata['handler_name'] ??
+                   '';
+
+      return AudioTrackInfo(
+        index: stream.index,
+        language: language,
+        title: title.isNotEmpty ? title : null,
+        codec: stream.codec.codec.isNotEmpty ? stream.codec.codec : 'Unknown',
+        channels: stream.codec.channels,
+        sampleRate: stream.codec.sampleRate,
+        isActive: stream.index == activeIndex,
+      );
+    }).toList();
+  }
+
+  List<SubtitleTrackInfo> getSubtitleTracks() {
+    if (_player == null || !_isInitialized) {
+      return [];
+    }
+    
+    final subtitleStreams = _player!.mediaInfo.subtitle;
+    if (subtitleStreams == null || subtitleStreams.isEmpty) {
+      return [];
+    }
+
+    final activeTracks = _player!.activeSubtitleTracks;
+    final activeIndex = activeTracks.isNotEmpty ? activeTracks.first : -1;
+
+    return subtitleStreams.map((stream) {
+      final metadata = stream.metadata;
+      final language = metadata['language'] ?? 
+                      metadata['LANGUAGE'] ?? 
+                      metadata['lang'] ?? 
+                      'Unknown';
+      final title = metadata['title'] ?? 
+                   metadata['TITLE'] ?? 
+                   metadata['handler_name'] ??
+                   '';
+
+      return SubtitleTrackInfo(
+        index: stream.index,
+        language: language,
+        title: title.isNotEmpty ? title : null,
+        codec: stream.codec.codec.isNotEmpty ? stream.codec.codec : 'Unknown',
+        isActive: stream.index == activeIndex,
+      );
+    }).toList();
+  }
+
+  int? getActiveAudioTrackIndex() {
+    if (_player == null || !_isInitialized) {
+      return null;
+    }
+    final activeTracks = _player!.activeAudioTracks;
+    return activeTracks.isNotEmpty ? activeTracks.first : null;
+  }
+
+  int? getActiveSubtitleTrackIndex() {
+    if (_player == null || !_isInitialized) {
+      return null;
+    }
+    final activeTracks = _player!.activeSubtitleTracks;
+    return activeTracks.isNotEmpty ? activeTracks.first : null;
+  }
+
+  Future<void> setAudioTrack(int trackIndex) async {
+    if (_player == null || !_isInitialized) {
+      if (kDebugMode) {
+        debugPrint('FVP: Cannot set audio track - player not initialized');
+      }
+      return;
+    }
+
+    final audioStreams = _player!.mediaInfo.audio;
+    if (audioStreams == null || 
+        trackIndex < 0 || 
+        trackIndex >= audioStreams.length) {
+      if (kDebugMode) {
+        debugPrint('FVP: Invalid audio track index: $trackIndex');
+      }
+      return;
+    }
+
+    _player!.activeAudioTracks = [trackIndex];
+    if (kDebugMode) {
+      debugPrint('FVP: Set active audio track to index: $trackIndex');
+    }
+  }
+
+  Future<void> setSubtitleTrack(int? trackIndex) async {
+    if (_player == null || !_isInitialized) {
+      if (kDebugMode) {
+        debugPrint('FVP: Cannot set subtitle track - player not initialized');
+      }
+      return;
+    }
+
+    if (trackIndex == null) {
+      // Disable subtitles
+      _player!.activeSubtitleTracks = [];
+      if (kDebugMode) {
+        debugPrint('FVP: Disabled subtitles');
+      }
+      return;
+    }
+
+    final subtitleStreams = _player!.mediaInfo.subtitle;
+    if (subtitleStreams == null || 
+        trackIndex < 0 || 
+        trackIndex >= subtitleStreams.length) {
+      if (kDebugMode) {
+        debugPrint('FVP: Invalid subtitle track index: $trackIndex');
+      }
+      return;
+    }
+
+    _player!.activeSubtitleTracks = [trackIndex];
+    if (kDebugMode) {
+      debugPrint('FVP: Set active subtitle track to index: $trackIndex');
+    }
+  }
 
   // Deprecated - kept for backward compatibility but will be removed
   // The screen should use textureId and StreamBuilders instead
@@ -152,8 +366,12 @@ class FvpPlayerController {
       _player!.state = fvp.PlaybackState.playing;
       _isPlaying = true;
       _isPaused = false;
+      if (!_isDisposing && !_playingController.isClosed) {
       _playingController.add(_isPlaying);
-      _initializedController.add(_isInitialized);
+    }
+      if (!_isDisposing && !_initializedController.isClosed) {
+        _initializedController.add(_isInitialized);
+      }
 
       // Give the player a moment to start
       await Future.delayed(const Duration(milliseconds: 100));
@@ -247,7 +465,9 @@ class FvpPlayerController {
         break;
     }
 
-    _playingController.add(_isPlaying);
+    if (!_isDisposing && !_playingController.isClosed) {
+      _playingController.add(_isPlaying);
+    }
   }
 
   void _handleMediaStatus(fvp.MediaStatus oldStatus, fvp.MediaStatus newStatus) {
@@ -262,7 +482,9 @@ class FvpPlayerController {
     _isBuffering = isCurrentlyBuffering;
 
     if (_isBuffering != wasBuffering) {
-      _bufferingController.add(_isBuffering);
+      if (!_isDisposing && !_bufferingController.isClosed) {
+        _bufferingController.add(_isBuffering);
+      }
       if (kDebugMode) {
         debugPrint('FVP: Buffering state changed: $_isBuffering (status: $newStatus)');
       }
@@ -275,7 +497,9 @@ class FvpPlayerController {
       final firstVideo = videoInfo.first;
       if (firstVideo.codec.width > 0 && firstVideo.codec.height > 0) {
         _aspectRatio = firstVideo.codec.width / firstVideo.codec.height;
-        _aspectRatioController.add(_aspectRatio);
+        if (!_isDisposing && !_aspectRatioController.isClosed) {
+          _aspectRatioController.add(_aspectRatio);
+        }
         if (kDebugMode) {
           debugPrint('FVP: Aspect ratio updated: $_aspectRatio');
         }
@@ -301,7 +525,9 @@ class FvpPlayerController {
         // Position is in milliseconds
         final currentPosition = _player!.position;
         _position = currentPosition / 1000.0; // Convert to seconds
-        _positionController.add(_position);
+        if (!_isDisposing && !_positionController.isClosed) {
+          _positionController.add(_position);
+        }
 
         // Get duration from mediaInfo if available
         final videoInfo = _player!.mediaInfo.video;
@@ -327,7 +553,9 @@ class FvpPlayerController {
       _player!.state = fvp.PlaybackState.paused;
       _isPaused = true;
       _isPlaying = false;
-      _playingController.add(false);
+      if (!_isDisposing && !_playingController.isClosed) {
+        _playingController.add(false);
+      }
     }
   }
 
@@ -336,7 +564,9 @@ class FvpPlayerController {
       _player!.state = fvp.PlaybackState.playing;
       _isPaused = false;
       _isPlaying = true;
-      _playingController.add(true);
+      if (!_isDisposing && !_playingController.isClosed) {
+        _playingController.add(true);
+      }
     }
   }
 
@@ -362,7 +592,9 @@ class FvpPlayerController {
     if (_player != null) {
       _player!.volume = _volume / 100.0;
     }
-    _volumeController.add(_volume);
+    if (!_isDisposing && !_volumeController.isClosed) {
+      _volumeController.add(_volume);
+    }
   }
 
   Future<void> stop() async {
@@ -379,7 +611,11 @@ class FvpPlayerController {
     _isPaused = false;
     _isBuffering = false;
     _isInitialized = false;
-    _playingController.add(false);
+    
+    // Only add event if not disposing (controllers will be closed)
+    if (!_isDisposing && !_playingController.isClosed) {
+      _playingController.add(false);
+    }
   }
 
   Future<void> _disposePlayer() async {
@@ -396,17 +632,29 @@ class FvpPlayerController {
     
     _textureId = null;
     _aspectRatio = null;
-    _aspectRatioController.add(null);
+    
+    // Only add event if not disposing (controllers will be closed)
+    if (!_isDisposing && !_aspectRatioController.isClosed) {
+      _aspectRatioController.add(null);
+    }
   }
 
   void dispose() {
+    // Set disposing flag to prevent event additions during disposal
+    _isDisposing = true;
+    
     _positionUpdateTimer?.cancel();
+    
+    // Stop player asynchronously, but close controllers immediately
+    // Events in stop() will be skipped due to _isDisposing flag
     stop();
-    _playingController.close();
-    _positionController.close();
-    _volumeController.close();
-    _initializedController.close();
-    _bufferingController.close();
-    _aspectRatioController.close();
+    
+    // Close all stream controllers
+    if (!_playingController.isClosed) _playingController.close();
+    if (!_positionController.isClosed) _positionController.close();
+    if (!_volumeController.isClosed) _volumeController.close();
+    if (!_initializedController.isClosed) _initializedController.close();
+    if (!_bufferingController.isClosed) _bufferingController.close();
+    if (!_aspectRatioController.isClosed) _aspectRatioController.close();
   }
 }
