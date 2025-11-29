@@ -587,62 +587,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.account_circle,
           ),
           Padding(
-            padding: AppConstants.contentPadding,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Trakt').h4(),
-                              const SizedBox(height: 4),
-                              if (_isCheckingTraktAuth)
-                                const Text('Checking authentication status...').muted()
-                              else if (_isTraktAuthenticated && _traktUsername != null)
-                                Text('Logged in as @$_traktUsername').muted()
-                              else if (_isTraktAuthenticated)
-                                const Text('Logged in').muted()
-                              else
-                                const Text('Not connected').muted(),
-                            ],
-                          ),
-                        ),
-                        if (_isCheckingTraktAuth)
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: LoadingIndicator(),
-                          )
-                        else if (_isTraktAuthenticated)
+            padding: EdgeInsets.symmetric(
+              horizontal: AppConstants.horizontalMargin,
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                SizedBox(
+                  width: 400,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Row(
                             children: [
-                              GhostButton(
-                                onPressed: _isSyncingWatchHistory ? null : _syncWatchHistory,
-                                child: const Text('Resync Watch History'),
-                              ),
-                              const SizedBox(width: 8),
-                              PrimaryButton(
-                                onPressed: _logoutTrakt,
-                                child: const Text('Logout'),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Trakt').h4(),
+                                    const SizedBox(height: 4),
+                                    if (_isCheckingTraktAuth)
+                                      const Text('Checking authentication status...').muted()
+                                    else if (_isTraktAuthenticated && _traktUsername != null)
+                                      Text('Logged in as @$_traktUsername').muted()
+                                    else if (_isTraktAuthenticated)
+                                      const Text('Logged in').muted()
+                                    else
+                                      const Text('Not connected').muted(),
+                                  ],
+                                ),
                               ),
                             ],
-                          )
-                        else
-                          PrimaryButton(
-                            onPressed: _loginTrakt,
-                            child: const Text('Login'),
                           ),
-                      ],
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if (_isCheckingTraktAuth)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: LoadingIndicator(),
+                                )
+                              else if (_isTraktAuthenticated)
+                                Row(
+                                  children: [
+                                    GhostButton(
+                                      onPressed: _isSyncingWatchHistory ? null : _syncWatchHistory,
+                                      child: const Text('Resync Watch History'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    PrimaryButton(
+                                      onPressed: _logoutTrakt,
+                                      child: const Text('Logout'),
+                                    ),
+                                  ],
+                                )
+                              else
+                                PrimaryButton(
+                                  onPressed: _loginTrakt,
+                                  child: const Text('Login'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           const SizedBox(height: AppConstants.sectionSpacing),
@@ -1729,23 +1746,10 @@ class _LanguageSelectState extends State<_LanguageSelect> {
             childCount: filteredLanguages.isEmpty ? 0 : null,
             builder: (context, index) {
               final language = filteredLanguages[index % filteredLanguages.length];
-              final isSelected = language['code'] == widget.selectedLanguage;
               
               return SelectItemButton(
                 value: language['code']!,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(language['name']!),
-                    ),
-                    if (isSelected)
-                      Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                  ],
-                ),
+                child: Text(language['name']!),
               );
             },
           );
