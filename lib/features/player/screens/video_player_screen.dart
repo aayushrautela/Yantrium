@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
@@ -277,8 +278,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       );
     } catch (e) {
       if (mounted) {
-        material.ScaffoldMessenger.of(context).showSnackBar(
-          material.SnackBar(content: Text('Failed to start playback: $e')),
+        showToast(
+          context: context,
+          builder: (context, overlay) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Failed to start playback: $e'),
+            ),
+          ),
         );
       }
     }
@@ -313,11 +320,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return material.Material(
-      color: colorScheme.background,
-      child: Scaffold(
-        backgroundColor: colorScheme.background,
-        child: Stack(
+    return Scaffold(
+      backgroundColor: colorScheme.background,
+      child: Stack(
           alignment: Alignment.center,
           children: [
             // 1. Video player (bottom layer)
@@ -367,7 +372,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     height: 200,
                     child: MouseRegion(
                       onEnter: (_) => _onControlsHoverEnter(),
-                      child: Container(color: material.Colors.transparent),
+                      child: Container(color: const Color(0x00000000)),
                     ),
                   );
                 }
@@ -393,7 +398,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -575,7 +579,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [material.Colors.transparent, colorScheme.background.withValues(alpha: 0.8)],
+                  colors: [const Color(0x00000000), colorScheme.background.withValues(alpha: 0.8)],
                 ),
               ),
               child: Column(
@@ -668,8 +672,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     if (isBuffering || !isInitialized) {
                                       return IconButton(
                                         variance: ButtonVariance.ghost,
-                                        icon: CircularProgressIndicator(
-                                          size: 48,
+                                        icon: ColorFiltered(
+                                          colorFilter: ColorFilter.mode(
+                                            colorScheme.foreground,
+                                            BlendMode.srcIn,
+                                          ),
+                                          child: CircularProgressIndicator(
+                                            size: 48,
+                                          ),
                                         ),
                                         onPressed: null,
                                       );
@@ -689,8 +699,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 )
                               : IconButton(
                                   variance: ButtonVariance.ghost,
-                                  icon: CircularProgressIndicator(
-                                    size: 48,
+                                  icon: ColorFiltered(
+                                    colorFilter: ColorFilter.mode(
+                                      colorScheme.foreground,
+                                      BlendMode.srcIn,
+                                    ),
+                                    child: CircularProgressIndicator(
+                                      size: 48,
+                                    ),
                                   ),
                                   onPressed: null,
                                 ),
