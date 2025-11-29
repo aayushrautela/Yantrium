@@ -4,15 +4,25 @@ import '../../features/library/models/catalog_item.dart';
 class ImagePreloader {
   static final Map<String, bool> _preloadCache = {};
 
-  /// Preload hero background images for immediate display
+  /// Preload hero background images and logos for immediate display (non-blocking)
   static void preloadHeroImages(List<CatalogItem> items, {int count = 3}) {
-    for (final item in items.take(count)) {
-      if (item.background != null && !_preloadCache.containsKey(item.background)) {
-        _preloadCache[item.background!] = true;
-        // Preload image into cache
-        NetworkImage(item.background!).resolve(ImageConfiguration.empty);
+    // Use microtask to ensure this doesn't block the UI
+    Future.microtask(() {
+      for (final item in items.take(count)) {
+        // Preload background image
+        if (item.background != null && !_preloadCache.containsKey(item.background)) {
+          _preloadCache[item.background!] = true;
+          // Preload image into cache (non-blocking)
+          NetworkImage(item.background!).resolve(ImageConfiguration.empty);
+        }
+        
+        // Preload logo if available
+        if (item.logo != null && !_preloadCache.containsKey(item.logo)) {
+          _preloadCache[item.logo!] = true;
+          NetworkImage(item.logo!).resolve(ImageConfiguration.empty);
+        }
       }
-    }
+    });
   }
 
   /// Preload poster images for catalog display

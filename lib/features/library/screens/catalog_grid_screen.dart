@@ -264,6 +264,15 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
         }
       });
 
+      // Prefetch images in background AFTER state update (non-blocking)
+      if (!isBackgroundRefresh && heroItems.isNotEmpty) {
+        // Use microtask to ensure UI update happens first
+        Future.microtask(() {
+          // Prefetch current + next 2 items (for smooth auto-rotation)
+          ImagePreloader.preloadHeroImages(heroItems, count: 3);
+        });
+      }
+
       // Enrich remaining hero items in background (only for initial load)
       if (!isBackgroundRefresh) {
         _loadRemainingHeroItems();
@@ -290,6 +299,11 @@ class _CatalogGridScreenState extends State<CatalogGridScreen> with AutomaticKee
       if (mounted) {
         setState(() {
           _heroItems = enrichedItems;
+        });
+        
+        // Prefetch all hero images after enrichment (non-blocking)
+        Future.microtask(() {
+          ImagePreloader.preloadHeroImages(enrichedItems, count: enrichedItems.length);
         });
       }
     } catch (e) {
