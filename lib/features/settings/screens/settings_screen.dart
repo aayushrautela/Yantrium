@@ -505,32 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(catalog.catalogName).h4(),
-                                        ),
-                                        if (catalog.isHeroSource)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context).colorScheme.primary,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              'HERO',
-                                              style: TextStyle(
-                                                color: Theme.of(context).colorScheme.primaryForeground,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
+                                    Text(catalog.catalogName).h4(),
                                     const SizedBox(height: 4),
                                     Text('${catalog.addonName} • ${_capitalize(catalog.catalogType)}').muted(),
                                     if (catalog.catalogId != null && catalog.catalogId!.isNotEmpty)
@@ -542,33 +517,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 12),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              if (catalog.isHeroSource)
-                                const SizedBox.shrink()
-                              else
-                                const SizedBox.shrink(),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Hero selection button
-                                  GhostButton(
-                                    onPressed: () => _setHeroCatalog(catalog),
-                                    density: ButtonDensity.icon,
-                                    child: Icon(
-                                      catalog.isHeroSource ? Icons.star : Icons.star_border,
-                                      color: catalog.isHeroSource
-                                          ? Theme.of(context).colorScheme.primary
-                                          : null,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Enable/disable toggle
-                                  Switch(
-                                    value: catalog.enabled,
-                                    onChanged: (value) => _toggleCatalog(catalog, value),
-                                  ),
-                                ],
+                              // Hero toggle
+                              Toggle(
+                                value: catalog.isHeroSource,
+                                onChanged: (value) {
+                                  // Toggle will pass the new value, but we use the existing toggle logic
+                                  _setHeroCatalog(catalog);
+                                },
+                                child: const Text('Hero'),
+                              ),
+                              const SizedBox(width: 8),
+                              // Enable/disable toggle
+                              Switch(
+                                value: catalog.enabled,
+                                onChanged: (value) => _toggleCatalog(catalog, value),
                               ),
                             ],
                           ),
