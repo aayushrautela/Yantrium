@@ -1077,9 +1077,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                                 end: Alignment.centerRight,
                                 colors: [
                                   Theme.of(context).colorScheme.background,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.6),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.2),
-                                  Colors.transparent,
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.6),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.2),
+                                  material.Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.15, 0.35, 1.0],
                               ),
@@ -1094,9 +1094,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                                 colors: [
                                   Theme.of(context).colorScheme.background,
                                   Theme.of(context).colorScheme.background,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
-                                  Colors.transparent,
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
+                                  material.Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
                               ),
@@ -1154,9 +1154,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                               end: Alignment.centerRight,
                               colors: [
                                 Theme.of(context).colorScheme.background,
-                                Theme.of(context).colorScheme.background.withOpacity(0.6),
-                                Theme.of(context).colorScheme.background.withOpacity(0.2),
-                                Colors.transparent,
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.6),
+                                Theme.of(context).colorScheme.background.withValues(alpha: 0.2),
+                                material.Colors.transparent,
                               ],
                               stops: const [0.0, 0.15, 0.35, 1.0],
                             ),
@@ -1171,9 +1171,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                                 colors: [
                                   Theme.of(context).colorScheme.background,
                                   Theme.of(context).colorScheme.background,
-                                  Theme.of(context).colorScheme.background.withOpacity(0.8),
-                                  Theme.of(context).colorScheme.background.withOpacity(0.5),
-                                  Colors.transparent,
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
+                                  Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
+                                  material.Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
                               ),
@@ -1195,9 +1195,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                     end: Alignment.centerRight,
                     colors: [
                       Theme.of(context).colorScheme.background,
-                      Theme.of(context).colorScheme.background.withOpacity(0.6),
-                      Theme.of(context).colorScheme.background.withOpacity(0.2),
-                      Colors.transparent,
+                      Theme.of(context).colorScheme.background.withValues(alpha: 0.6),
+                      Theme.of(context).colorScheme.background.withValues(alpha: 0.2),
+                      material.Colors.transparent,
                     ],
                     stops: const [0.0, 0.15, 0.35, 1.0],
                   ),
@@ -1214,9 +1214,9 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                     colors: [
                       Theme.of(context).colorScheme.background,
                       Theme.of(context).colorScheme.background,
-                      Theme.of(context).colorScheme.background.withOpacity(0.8),
-                      Theme.of(context).colorScheme.background.withOpacity(0.5),
-                      Colors.transparent,
+                      Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
+                      Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
+                      material.Colors.transparent,
                     ],
                     stops: const [0.0, 0.05, 0.1, 0.3, 0.85],
                   ),
@@ -1241,7 +1241,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                         height: 50,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                          color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                           border: Border.all(
                             color: Theme.of(context).colorScheme.border,
                             width: 1,
@@ -1272,7 +1272,7 @@ class _HeroSectionState extends State<_HeroSection> with SingleTickerProviderSta
                         height: 50,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                          color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                           border: Border.all(
                             color: Theme.of(context).colorScheme.border,
                             width: 1,
@@ -1579,7 +1579,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -1605,7 +1605,7 @@ class _CatalogSectionState extends State<_CatalogSection> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -1703,8 +1703,8 @@ class _HeroSectionSkeleton extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
+                    material.Colors.transparent,
+                    Theme.of(context).colorScheme.background.withValues(alpha: 0.7),
                   ],
                 ),
               ),
@@ -1720,7 +1720,7 @@ class _HeroSectionSkeleton extends StatelessWidget {
                       Container(
                         width: 400,
                     height: 100,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.8),
                       ).asSkeleton(),
                   const SizedBox(height: 20),
 
@@ -1730,13 +1730,13 @@ class _HeroSectionSkeleton extends StatelessWidget {
                       Container(
                         height: 20,
                         width: 100,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                       ).asSkeleton(),
                       const SizedBox(width: 16),
                       Container(
                         height: 20,
                         width: 80,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                       ).asSkeleton(),
                     ],
                   ),
@@ -1746,13 +1746,13 @@ class _HeroSectionSkeleton extends StatelessWidget {
                       Container(
                         height: 20,
                         width: 600,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                       ).asSkeleton(),
                       const SizedBox(height: 8),
                       Container(
                         height: 20,
                         width: 500,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.7),
                       ).asSkeleton(),
                       const SizedBox(height: 24),
 
@@ -1763,7 +1763,7 @@ class _HeroSectionSkeleton extends StatelessWidget {
                             height: 48,
                             width: 140,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ).asSkeleton(),
@@ -1772,7 +1772,7 @@ class _HeroSectionSkeleton extends StatelessWidget {
                             height: 48,
                             width: 140,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.5),
+                              color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ).asSkeleton(),
@@ -1797,7 +1797,7 @@ class _HeroSectionSkeleton extends StatelessWidget {
                     height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.54),
+                      color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.54),
                     ),
                   ),
                 ),
@@ -1872,7 +1872,7 @@ class _ContinueWatchingSectionSkeleton extends StatelessWidget {
                             child: Container(
                               height: 4,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                                 borderRadius: const BorderRadius.only(
                                   bottomLeft: Radius.circular(8),
                                   bottomRight: Radius.circular(8),
@@ -1900,7 +1900,7 @@ class _ContinueWatchingSectionSkeleton extends StatelessWidget {
                               height: 48,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
                               ),
                               child: Icon(
                                 Icons.play_arrow,
@@ -1917,7 +1917,7 @@ class _ContinueWatchingSectionSkeleton extends StatelessWidget {
                             child: Container(
                               height: 16,
                               width: 200,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.9),
                             ).asSkeleton(),
                           ),
                         ],
@@ -2233,7 +2233,7 @@ class _ContinueWatchingSectionState extends State<_ContinueWatchingSection> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -2259,7 +2259,7 @@ class _ContinueWatchingSectionState extends State<_ContinueWatchingSection> {
                       height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.background.withOpacity(0.8),
+                        color: Theme.of(context).colorScheme.background.withValues(alpha: 0.8),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.border,
                         ),
@@ -2400,8 +2400,8 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                           center: Alignment.bottomLeft,
                           radius: 1.6,
                           colors: [
-                            material.Colors.black.withOpacity(0.85),
-                            material.Colors.black.withOpacity(0.5),
+                            Theme.of(context).colorScheme.background.withValues(alpha: 0.85),
+                            Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
                             material.Colors.transparent,
                           ],
                           stops: const [0.0, 0.35, 1.0],
@@ -2422,7 +2422,7 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                         borderRadius: BorderRadius.circular(6),
                         boxShadow: [
                           BoxShadow(
-                            color: material.Colors.black.withOpacity(0.4),
+                            color: Theme.of(context).colorScheme.background.withValues(alpha: 0.4),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -2477,7 +2477,7 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                                     Text(
                                       'S${widget.seasonNumber.toString().padLeft(2, '0')}E${widget.episodeNumber.toString().padLeft(2, '0')}',
                                       style: TextStyle(
-                                        color: Theme.of(context).colorScheme.foreground.withOpacity(0.8),
+                                        color: Theme.of(context).colorScheme.foreground.withValues(alpha: 0.8),
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -2513,7 +2513,7 @@ class _ContinueWatchingCardState extends State<_ContinueWatchingCard> {
                   child: Container(
                     height: 6,
                     decoration: BoxDecoration(
-                      color: material.Colors.black.withOpacity(0.5),
+                      color: Theme.of(context).colorScheme.background.withValues(alpha: 0.5),
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
