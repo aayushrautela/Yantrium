@@ -460,16 +460,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       ),
                     const SizedBox(height: 16),
 
-                    // Title
-                    Text(
-                      widget.episodeName ?? widget.title ?? 'Unknown Title',
-                      style: TextStyle(
-                        color: colorScheme.foreground,
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
+                    // Title - Hide for movies when logo is visible, but always show for episodes
+                    if (!widget.isMovie || widget.logoUrl == null)
+                      Text(
+                        widget.episodeName ?? widget.title ?? 'Unknown Title',
+                        style: TextStyle(
+                          color: colorScheme.foreground,
+                          fontSize: 48,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
+                    if (!widget.isMovie || widget.logoUrl == null)
+                      const SizedBox(height: 20),
 
                     // Description
                     if (widget.description != null)
@@ -483,22 +485,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           height: 1.6,
                         ),
                       ),
-                    const SizedBox(height: 40),
-
-                    // Resume button
-                    PrimaryButton(
-                      onPressed: () => _controller.togglePlayPause(),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.play_arrow, size: 28),
-                          const SizedBox(width: 12),
-                          const Text('RESUME',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -671,17 +657,43 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             },
                           ),
                           const SizedBox(width: 20),
-                          IconButton(
-                            variance: ButtonVariance.ghost,
-                            icon: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: colorScheme.foreground,
-                                size: 48),
-                            onPressed: () {
-                              _controller.togglePlayPause();
-                              _onControlInteraction();
-                            },
-                          ),
+                          // Show loading indicator when buffering or not initialized, otherwise show play/pause button
+                          _controller.videoController != null
+                              ? ValueListenableBuilder<VideoPlayerValue>(
+                                  valueListenable: _controller.videoController!,
+                                  builder: (context, value, child) {
+                                    final isBuffering = value.isBuffering;
+                                    final isInitialized = value.isInitialized;
+                                    // Show loading indicator when buffering or not initialized
+                                    if (isBuffering || !isInitialized) {
+                                      return IconButton(
+                                        variance: ButtonVariance.ghost,
+                                        icon: CircularProgressIndicator(
+                                          size: 48,
+                                        ),
+                                        onPressed: null,
+                                      );
+                                    }
+                                    return IconButton(
+                                      variance: ButtonVariance.ghost,
+                                      icon: Icon(
+                                          isPlaying ? Icons.pause : Icons.play_arrow,
+                                          color: colorScheme.foreground,
+                                          size: 48),
+                                      onPressed: () {
+                                        _controller.togglePlayPause();
+                                        _onControlInteraction();
+                                      },
+                                    );
+                                  },
+                                )
+                              : IconButton(
+                                  variance: ButtonVariance.ghost,
+                                  icon: CircularProgressIndicator(
+                                    size: 48,
+                                  ),
+                                  onPressed: null,
+                                ),
                           const SizedBox(width: 20),
                           IconButton(
                             variance: ButtonVariance.ghost,
