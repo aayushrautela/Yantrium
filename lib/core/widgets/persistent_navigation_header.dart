@@ -59,10 +59,13 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: AppConstants.horizontalPadding.copyWith(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: AppConstants.horizontalMargin,
         top: 16,
         bottom: 16,
       ),
+      constraints: const BoxConstraints(minHeight: 56),
       child: Row(
         children: [
           // Logo
@@ -144,24 +147,10 @@ class _PersistentNavigationHeaderState extends State<PersistentNavigationHeader>
               ),
             ),
             const SizedBox(width: 16),
+          ] else ...[
+            // Placeholder to maintain consistent width when search is hidden
+            SizedBox(width: 300),
           ],
-          
-          // Notifications
-          GhostButton(
-            density: ButtonDensity.icon,
-            child: const Icon(Icons.notifications_outlined),
-          ),
-          const SizedBox(width: 8),
-          
-          // Profile
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.muted,
-            ),
-          ),
         ],
       ),
     );
@@ -186,6 +175,7 @@ class _NavLink extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
+          fontSize: 18,
           color: isActive
               ? Theme.of(context).colorScheme.foreground
               : Theme.of(context).colorScheme.mutedForeground,
