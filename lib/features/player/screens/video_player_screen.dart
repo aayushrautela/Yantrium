@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
@@ -372,7 +371,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     height: 200,
                     child: MouseRegion(
                       onEnter: (_) => _onControlsHoverEnter(),
-                      child: Container(color: const Color(0x00000000)),
+                      child: Container(color: Colors.transparent),
                     ),
                   );
                 }
@@ -398,6 +397,74 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ],
         ),
+    );
+  }
+
+  Widget _buildStreamSelectionPopover(BuildContext context) {
+    return ModalContainer(
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Stream Selection').large().medium(),
+            const Gap(8),
+            const Text('Stream selection will be available here.').muted(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioSelectionPopover(BuildContext context) {
+    return ModalContainer(
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Audio Track').large().medium(),
+            const Gap(8),
+            const Text('Audio track selection will be available here.').muted(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubtitleSelectionPopover(BuildContext context) {
+    return ModalContainer(
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Subtitles').large().medium(),
+            const Gap(8),
+            const Text('Subtitle selection will be available here.').muted(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsPopover(BuildContext context) {
+    return ModalContainer(
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Player Settings').large().medium(),
+            const Gap(8),
+            const Text('Player settings will be available here.').muted(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -579,7 +646,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [const Color(0x00000000), colorScheme.background.withValues(alpha: 0.8)],
+                  colors: [Colors.transparent, colorScheme.background.withValues(alpha: 0.8)],
                 ),
               ),
               child: Column(
@@ -728,7 +795,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         children: [
                           GhostButton(
                             onPressed: () {
-                              // TODO: Implement stream selection
+                              showPopover(
+                                context: context,
+                                alignment: Alignment.topRight,
+                                offset: const Offset(20, 8),
+                                overlayBarrier: OverlayBarrier(
+                                  borderRadius: Theme.of(context).borderRadiusLg,
+                                ),
+                                builder: (context) => _buildStreamSelectionPopover(context),
+                              );
                             },
                             child: Text(
                               'Stream: 1',
@@ -741,7 +816,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             icon: Icon(Icons.audiotrack,
                                 color: colorScheme.foreground, size: 28),
                             onPressed: () {
-                              // TODO: Implement audio stream selection
+                              showPopover(
+                                context: context,
+                                alignment: Alignment.topRight,
+                                offset: const Offset(20, 8),
+                                overlayBarrier: OverlayBarrier(
+                                  borderRadius: Theme.of(context).borderRadiusLg,
+                                ),
+                                builder: (context) => _buildAudioSelectionPopover(context),
+                              );
                             },
                           ),
                           IconButton(
@@ -749,7 +832,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             icon: Icon(Icons.closed_caption,
                                 color: colorScheme.foreground, size: 28),
                             onPressed: () {
-                              // TODO: Implement subtitle selection
+                              showPopover(
+                                context: context,
+                                alignment: Alignment.topRight,
+                                offset: const Offset(20, 8),
+                                overlayBarrier: OverlayBarrier(
+                                  borderRadius: Theme.of(context).borderRadiusLg,
+                                ),
+                                builder: (context) => _buildSubtitleSelectionPopover(context),
+                              );
                             },
                           ),
                           IconButton(
@@ -757,7 +848,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             icon: Icon(Icons.settings,
                                 color: colorScheme.foreground, size: 28),
                             onPressed: () {
-                              // TODO: Implement settings
+                              showPopover(
+                                context: context,
+                                alignment: Alignment.topRight,
+                                offset: const Offset(20, 8),
+                                overlayBarrier: OverlayBarrier(
+                                  borderRadius: Theme.of(context).borderRadiusLg,
+                                ),
+                                builder: (context) => _buildSettingsPopover(context),
+                              );
                             },
                           ),
                         ],
