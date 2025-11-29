@@ -413,108 +413,109 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildStreamSelectionPopover(BuildContext context) {
-    return ModalContainer(
-      child: SizedBox(
-        width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Stream Selection').large().medium(),
-            const Gap(8),
-            const Text('Stream selection will be available here.').muted(),
-          ],
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 300,
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.border,
+          width: 1,
         ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Stream Selection',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          Text(
+            'Stream selection will be available here.',
+            style: TextStyle(
+              color: colorScheme.foreground.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildAudioSelectionPopover(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
-    // Get audio tracks from video controller if available
-    // For now, we'll use a default track since video_player doesn't expose tracks directly
     final audioTracks = _getAudioTracks();
     
-    return ModalContainer(
-      child: SizedBox(
-        width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Audio Track').large().medium(),
-            const Gap(16),
-            if (audioTracks.isEmpty)
-              const Text('No audio tracks available.').muted()
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: audioTracks.length,
-                  itemBuilder: (context, index) {
-                    final track = audioTracks[index];
-                    final isSelected = track.isActive;
-                    return Clickable(
-                      onPressed: () {
-                        _controller.setAudioTrack(track.index);
-                        closeOverlay(context);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    audioTracks[index].displayName,
-                                    style: TextStyle(
-                                      color: colorScheme.foreground,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  if (audioTracks[index].description.isNotEmpty)
-                                    Text(
-                                      audioTracks[index].description,
-                                      style: TextStyle(
-                                        color: colorScheme.foreground.withValues(alpha: 0.7),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  if (audioTracks[index].language != 'Unknown')
-                                    Text(
-                                      audioTracks[index].language,
-                                      style: TextStyle(
-                                        color: colorScheme.foreground.withValues(alpha: 0.5),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              Icon(
-                                Icons.check,
-                                color: colorScheme.primary,
-                                size: 20,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
+    return Container(
+      width: 300,
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.border,
+          width: 1,
         ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Audio Track',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          if (audioTracks.isEmpty)
+            Text(
+              'No audio tracks available.',
+              style: TextStyle(
+                color: colorScheme.foreground.withValues(alpha: 0.7),
+                fontSize: 14,
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: audioTracks.length,
+                itemBuilder: (context, index) {
+                  final track = audioTracks[index];
+                  final isSelected = track.isActive;
+                  
+                  // Build label with additional info
+                  String label = track.displayName;
+                  if (track.description.isNotEmpty) {
+                    label += ' • ${track.description}';
+                  }
+                  if (track.language != 'Unknown') {
+                    label += ' (${track.language})';
+                  }
+                  
+                  return VideoSafeShadcnItem(
+                    label: label,
+                    isSelected: isSelected,
+                    onTap: () {
+                      _controller.setAudioTrack(track.index);
+                      closeOverlay(context);
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -531,134 +532,115 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final subtitleTracks = _getSubtitleTracks();
     
-    return ModalContainer(
-      child: SizedBox(
-        width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Subtitles').large().medium(),
-            const Gap(16),
-            // Option to disable subtitles
-            Clickable(
-              onPressed: () {
-                _controller.setSubtitleTrack(null);
-                closeOverlay(context);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _controller.getActiveSubtitleTrackIndex() == null
-                      ? colorScheme.primary.withValues(alpha: 0.1)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+    return Container(
+      width: 300,
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.border,
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Subtitles',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          // Option to disable subtitles
+          VideoSafeShadcnItem(
+            label: 'Off',
+            isSelected: _controller.getActiveSubtitleTrackIndex() == null,
+            onTap: () {
+              _controller.setSubtitleTrack(null);
+              closeOverlay(context);
+            },
+          ),
+          if (subtitleTracks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'No subtitle tracks available.',
+                style: TextStyle(
+                  color: colorScheme.foreground.withValues(alpha: 0.7),
+                  fontSize: 14,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Off',
-                        style: TextStyle(
-                          color: colorScheme.foreground,
-                          fontWeight: _controller.getActiveSubtitleTrackIndex() == null
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                    if (_controller.getActiveSubtitleTrackIndex() == null)
-                      Icon(
-                        Icons.check,
-                        color: colorScheme.primary,
-                        size: 20,
-                      ),
-                  ],
-                ),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: subtitleTracks.length,
+                itemBuilder: (context, index) {
+                  final track = subtitleTracks[index];
+                  final isSelected = track.isActive;
+                  
+                  // Build label with codec info if available
+                  String label = track.displayName;
+                  if (track.codec.isNotEmpty && track.codec != 'Unknown') {
+                    label += ' • ${track.codec.toUpperCase()}';
+                  }
+                  
+                  return VideoSafeShadcnItem(
+                    label: label,
+                    isSelected: isSelected,
+                    onTap: () {
+                      _controller.setSubtitleTrack(track.index);
+                      closeOverlay(context);
+                    },
+                  );
+                },
               ),
             ),
-            if (subtitleTracks.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: const Text('No subtitle tracks available.').muted(),
-              )
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: subtitleTracks.length,
-                  itemBuilder: (context, index) {
-                    final track = subtitleTracks[index];
-                    final isSelected = track.isActive;
-                    return Clickable(
-                      onPressed: () {
-                        _controller.setSubtitleTrack(track.index);
-                        closeOverlay(context);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? colorScheme.primary.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    track.displayName,
-                                    style: TextStyle(
-                                      color: colorScheme.foreground,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  if (track.codec.isNotEmpty && track.codec != 'Unknown')
-                                    Text(
-                                      track.codec.toUpperCase(),
-                                      style: TextStyle(
-                                        color: colorScheme.foreground.withValues(alpha: 0.7),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              Icon(
-                                Icons.check,
-                                color: colorScheme.primary,
-                                size: 20,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildSettingsPopover(BuildContext context) {
-    return ModalContainer(
-      child: SizedBox(
-        width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Player Settings').large().medium(),
-            const Gap(8),
-            const Text('Player settings will be available here.').muted(),
-          ],
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 300,
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.border,
+          width: 1,
         ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Player Settings',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          Text(
+            'Player settings will be available here.',
+            style: TextStyle(
+              color: colorScheme.foreground.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1051,6 +1033,96 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           },
         );
       },
+    );
+  }
+}
+
+/// Video-safe Shadcn-style item widget that renders perfectly over video textures
+/// Avoids any blur or transparency that can cause glitches
+class VideoSafeShadcnItem extends StatefulWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const VideoSafeShadcnItem({
+    super.key,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<VideoSafeShadcnItem> createState() => _VideoSafeShadcnItemState();
+}
+
+class _VideoSafeShadcnItemState extends State<VideoSafeShadcnItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. GET YOUR ACCENT COLOR
+    // This grabs the specific color (Blue, Violet, Orange) from your ThemeService
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
+    const zinc50 = Color(0xFFFAFAFA); 
+    
+    // SAFE BACKGROUND:
+    // Keep it dark grey (Zinc 800) on hover. 
+    // We DO NOT use the accent color for the background because 
+    // vibrant/transparent backgrounds can glitch over video textures.
+    final backgroundColor = _isHovered 
+        ? const Color(0xFF27272A) 
+        : Colors.transparent;
+
+    // ACCENT FOREGROUND:
+    // We apply the accent color to the Text and Icon instead.
+    // This looks premium (like Shadcn) and renders perfectly over video.
+    final foregroundColor = widget.isSelected 
+        ? primaryColor 
+        : zinc50;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          margin: const EdgeInsets.only(bottom: 2),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(6),
+            
+            // OPTIONAL: Add a thin border of your accent color when selected
+            // This reinforces the selection without filling the card
+            border: widget.isSelected 
+                ? Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1) 
+                : Border.all(color: Colors.transparent, width: 1),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: foregroundColor, // <--- Accent Color Applied Here
+                    fontSize: 13,
+                    fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.w400,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+              if (widget.isSelected)
+                Icon(
+                  Icons.check, 
+                  color: foregroundColor, // <--- And Here
+                  size: 16
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
