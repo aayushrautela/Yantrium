@@ -413,119 +413,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildStreamSelectionPopover(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.border,
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Stream Selection',
-            style: TextStyle(
-              color: colorScheme.foreground,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Gap(16),
-          Text(
-            'Stream selection will be available here.',
-            style: TextStyle(
-              color: colorScheme.foreground.withValues(alpha: 0.7),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAudioSelectionPopover(BuildContext parentContext) {
-    final colorScheme = Theme.of(parentContext).colorScheme;
-    
-    // Use StatefulBuilder to allow the popover to rebuild when tracks change
-    return StatefulBuilder(
-      builder: (popoverContext, setState) {
-        final audioTracks = _getAudioTracks();
-        
-        return Container(
-          width: 400,
-          height: 450,
-          decoration: BoxDecoration(
-            color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: colorScheme.border,
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header with title
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Text(
-                  'AUDIO TRACK',
-                  style: TextStyle(
-                    color: colorScheme.foreground,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              // Audio tracks list - scrollable section
-              if (audioTracks.isEmpty)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No audio tracks available.',
-                      style: TextStyle(
-                        color: colorScheme.foreground.withValues(alpha: 0.7),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                    itemCount: audioTracks.length,
-                    itemBuilder: (context, index) {
-                      final track = audioTracks[index];
-                      return _AudioTrackItem(
-                        track: track,
-                        onTap: () {
-                          _controller.setAudioTrack(track.index);
-                          // Rebuild the popover to update selection indicators
-                          setState(() {});
-                          // Don't close the popover - let user close it manually or click outside
-                        },
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   List<AudioTrackInfo> _getAudioTracks() {
     return _controller.getAudioTracks();
   }
@@ -534,126 +421,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return _controller.getSubtitleTracks();
   }
 
-  Widget _buildSubtitleSelectionPopover(BuildContext parentContext) {
-    final colorScheme = Theme.of(parentContext).colorScheme;
-    
-    // Use Builder to capture the popover's context
-    return Builder(
-      builder: (popoverContext) {
-        final subtitleTracks = _getSubtitleTracks();
-        
-        return Container(
-          width: 300,
-          decoration: BoxDecoration(
-            color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: colorScheme.border,
-              width: 1,
-            ),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Subtitles',
-                style: TextStyle(
-                  color: colorScheme.foreground,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Gap(16),
-              // Option to disable subtitles
-              VideoSafeShadcnItem(
-                label: 'Off',
-                isSelected: _controller.getActiveSubtitleTrackIndex() == null,
-                onTap: () {
-                  _controller.setSubtitleTrack(null);
-                  Navigator.of(popoverContext).pop();
-                },
-              ),
-          if (subtitleTracks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'No subtitle tracks available.',
-                style: TextStyle(
-                  color: colorScheme.foreground.withValues(alpha: 0.7),
-                  fontSize: 14,
-                ),
-              ),
-            )
-          else
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: subtitleTracks.length,
-                itemBuilder: (context, index) {
-                  final track = subtitleTracks[index];
-                  final isSelected = track.isActive;
-                  
-                  // Build label with codec info if available
-                  String label = track.displayName;
-                  if (track.codec.isNotEmpty && track.codec != 'Unknown') {
-                    label += ' • ${track.codec.toUpperCase()}';
-                  }
-                  
-                  return VideoSafeShadcnItem(
-                    label: label,
-                    isSelected: isSelected,
-                    onTap: () {
-                      _controller.setSubtitleTrack(track.index);
-                      Navigator.of(popoverContext).pop();
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-    );
-  }
-
-  Widget _buildSettingsPopover(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.border,
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Player Settings',
-            style: TextStyle(
-              color: colorScheme.foreground,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Gap(16),
-          Text(
-            'Player settings will be available here.',
-            style: TextStyle(
-              color: colorScheme.foreground.withValues(alpha: 0.7),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildUnifiedSettingsPopover(BuildContext parentContext, {int initialTab = 3}) {
+    return _UnifiedSettingsPopoverContent(
+      controller: _controller,
+      getAudioTracks: _getAudioTracks,
+      getSubtitleTracks: _getSubtitleTracks,
+      setAudioTrack: (index) => _controller.setAudioTrack(index),
+      setSubtitleTrack: (index) => _controller.setSubtitleTrack(index),
+      getActiveSubtitleTrackIndex: () => _controller.getActiveSubtitleTrackIndex(),
+      initialTab: initialTab,
     );
   }
 
@@ -978,7 +754,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 overlayBarrier: OverlayBarrier(
                                   borderRadius: Theme.of(context).borderRadiusLg,
                                 ),
-                                builder: (context) => _buildStreamSelectionPopover(context),
+                                builder: (context) => _buildUnifiedSettingsPopover(context, initialTab: 0),
                               );
                             },
                             child: Text(
@@ -999,7 +775,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 overlayBarrier: OverlayBarrier(
                                   borderRadius: Theme.of(context).borderRadiusLg,
                                 ),
-                                builder: (context) => _buildAudioSelectionPopover(context),
+                                builder: (context) => _buildUnifiedSettingsPopover(context, initialTab: 1),
                               );
                             },
                           ),
@@ -1015,7 +791,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 overlayBarrier: OverlayBarrier(
                                   borderRadius: Theme.of(context).borderRadiusLg,
                                 ),
-                                builder: (context) => _buildSubtitleSelectionPopover(context),
+                                builder: (context) => _buildUnifiedSettingsPopover(context, initialTab: 2),
                               );
                             },
                           ),
@@ -1031,7 +807,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 overlayBarrier: OverlayBarrier(
                                   borderRadius: Theme.of(context).borderRadiusLg,
                                 ),
-                                builder: (context) => _buildSettingsPopover(context),
+                                builder: (context) => _buildUnifiedSettingsPopover(context, initialTab: 3),
                               );
                             },
                           ),
@@ -1049,7 +825,382 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 }
 
-/// Audio track item widget matching the design spec
+/// Tab button widget for player settings popover
+class _PlayerTabButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PlayerTabButton({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Clickable(
+      onPressed: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected
+                    ? colorScheme.primary
+                    : colorScheme.foreground.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.foreground.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (isSelected)
+            Center(
+              child: Container(
+                height: 3,
+                width: label.length * 10.5,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 3),
+        ],
+      ),
+    );
+  }
+}
+
+/// Unified settings popover content with tab state management
+class _UnifiedSettingsPopoverContent extends StatefulWidget {
+  final FvpPlayerController controller;
+  final List<AudioTrackInfo> Function() getAudioTracks;
+  final List<SubtitleTrackInfo> Function() getSubtitleTracks;
+  final void Function(int) setAudioTrack;
+  final void Function(int?) setSubtitleTrack;
+  final int? Function() getActiveSubtitleTrackIndex;
+  final int initialTab; // 0: Streams, 1: Audio, 2: Subtitles, 3: Settings
+
+  const _UnifiedSettingsPopoverContent({
+    required this.controller,
+    required this.getAudioTracks,
+    required this.getSubtitleTracks,
+    required this.setAudioTrack,
+    required this.setSubtitleTrack,
+    required this.getActiveSubtitleTrackIndex,
+    this.initialTab = 3,
+  });
+
+  @override
+  State<_UnifiedSettingsPopoverContent> createState() => _UnifiedSettingsPopoverContentState();
+}
+
+class _UnifiedSettingsPopoverContentState extends State<_UnifiedSettingsPopoverContent> {
+  late int _selectedTab; // 0: Streams, 1: Audio, 2: Subtitles, 3: Settings
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTab = widget.initialTab;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      width: 650,
+      height: 500,
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.border,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Tab navigation
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _PlayerTabButton(
+                    label: 'STREAM',
+                    icon: Icons.video_library,
+                    isSelected: _selectedTab == 0,
+                    onTap: () => setState(() => _selectedTab = 0),
+                  ),
+                ),
+                Expanded(
+                  child: _PlayerTabButton(
+                    label: 'AUDIO',
+                    icon: Icons.audiotrack,
+                    isSelected: _selectedTab == 1,
+                    onTap: () => setState(() => _selectedTab = 1),
+                  ),
+                ),
+                Expanded(
+                  child: _PlayerTabButton(
+                    label: 'SUBTITLES',
+                    icon: Icons.closed_caption,
+                    isSelected: _selectedTab == 2,
+                    onTap: () => setState(() => _selectedTab = 2),
+                  ),
+                ),
+                Expanded(
+                  child: _PlayerTabButton(
+                    label: 'SETTINGS',
+                    icon: Icons.settings,
+                    isSelected: _selectedTab == 3,
+                    onTap: () => setState(() => _selectedTab = 3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Tab content
+          Expanded(
+            child: _buildTabContent(_selectedTab),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabContent(int tabIndex) {
+    switch (tabIndex) {
+      case 0:
+        return _buildStreamTab();
+      case 1:
+        return _buildAudioTab();
+      case 2:
+        return _buildSubtitleTab();
+      case 3:
+        return _buildSettingsTab();
+      default:
+        return _buildStreamTab();
+    }
+  }
+
+  Widget _buildStreamTab() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Stream Selection',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          Text(
+            'Stream selection will be available here.',
+            style: TextStyle(
+              color: colorScheme.foreground.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudioTab() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Use StatefulBuilder to allow the tab to rebuild when tracks change
+    return StatefulBuilder(
+      builder: (popoverContext, setState) {
+        // Fetch tracks inside StatefulBuilder so they refresh when setState is called
+        final audioTracks = widget.getAudioTracks();
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text(
+                'AUDIO TRACK',
+                style: TextStyle(
+                  color: colorScheme.foreground,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            // Audio tracks list
+            if (audioTracks.isEmpty)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'No audio tracks available.',
+                    style: TextStyle(
+                      color: colorScheme.foreground.withValues(alpha: 0.7),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  itemCount: audioTracks.length,
+                  itemBuilder: (context, index) {
+                    final track = audioTracks[index];
+                    return _AudioTrackItem(
+                      track: track,
+                      onTap: () {
+                        widget.setAudioTrack(track.index);
+                        // Rebuild the tab to update selection indicators
+                        setState(() {});
+                        // Don't close the popover - let user close it manually or click outside
+                      },
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSubtitleTab() {
+    final subtitleTracks = widget.getSubtitleTracks();
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Use StatefulBuilder to allow the tab to rebuild when tracks change
+    return StatefulBuilder(
+      builder: (popoverContext, setState) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Subtitles',
+                style: TextStyle(
+                  color: colorScheme.foreground,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Gap(16),
+              // Option to disable subtitles
+              VideoSafeShadcnItem(
+                label: 'Off',
+                isSelected: widget.getActiveSubtitleTrackIndex() == null,
+                onTap: () {
+                  widget.setSubtitleTrack(null);
+                  setState(() {});
+                },
+              ),
+              if (subtitleTracks.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'No subtitle tracks available.',
+                    style: TextStyle(
+                      color: colorScheme.foreground.withValues(alpha: 0.7),
+                      fontSize: 14,
+                    ),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: subtitleTracks.length,
+                    itemBuilder: (context, index) {
+                      final track = subtitleTracks[index];
+                      final isSelected = track.isActive;
+                      
+                      String label = track.displayName;
+                      if (track.codec.isNotEmpty && track.codec != 'Unknown') {
+                        label += ' • ${track.codec.toUpperCase()}';
+                      }
+                      
+                      return VideoSafeShadcnItem(
+                        label: label,
+                        isSelected: isSelected,
+                        onTap: () {
+                          widget.setSubtitleTrack(track.index);
+                          setState(() {});
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSettingsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Player Settings',
+            style: TextStyle(
+              color: colorScheme.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Gap(16),
+          Text(
+            'Player settings will be available here.',
+            style: TextStyle(
+              color: colorScheme.foreground.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AudioTrackItem extends StatefulWidget {
   final AudioTrackInfo track;
   final VoidCallback onTap;
@@ -1198,13 +1349,17 @@ class _AudioTrackItemState extends State<_AudioTrackItem> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Checkmark for selected track
-              if (isSelected)
-                Icon(
-                  Icons.check,
-                  color: colorScheme.primary,
-                  size: 18,
-                ),
+              // Checkmark for selected track - always reserve space
+              SizedBox(
+                width: 24,
+                child: isSelected
+                    ? Icon(
+                        Icons.check,
+                        color: colorScheme.primary,
+                        size: 18,
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         ),
