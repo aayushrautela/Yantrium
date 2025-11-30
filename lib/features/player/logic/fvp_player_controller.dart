@@ -130,9 +130,16 @@ class FvpPlayerController {
     }
 
     final activeTracks = _player!.activeAudioTracks;
-    final activeIndex = activeTracks.isNotEmpty ? activeTracks.first : -1;
+    // Fix: If activeTracks is empty, default to track 0 (first track)
+    // This handles the case where the player reports [] but track 0 is actually playing
+    final activeIndex = activeTracks.isNotEmpty ? activeTracks.first : 0;
 
-    return audioStreams.map((stream) {
+    // Use array index (0, 1, 2, 3...) instead of stream.index
+    // FVP expects array positions, not the media file's internal stream IDs
+    return audioStreams.asMap().entries.map((entry) {
+      final arrayIndex = entry.key; // This is 0, 1, 2, 3...
+      final stream = entry.value;
+      
       final metadata = stream.metadata;
       final language = metadata['language'] ?? 
                       metadata['LANGUAGE'] ?? 
@@ -144,13 +151,13 @@ class FvpPlayerController {
                    '';
 
       return AudioTrackInfo(
-        index: stream.index,
+        index: arrayIndex, // Use array position instead of stream.index
         language: language,
         title: title.isNotEmpty ? title : null,
         codec: stream.codec.codec.isNotEmpty ? stream.codec.codec : 'Unknown',
         channels: stream.codec.channels,
         sampleRate: stream.codec.sampleRate,
-        isActive: stream.index == activeIndex,
+        isActive: arrayIndex == activeIndex, // Compare array positions
       );
     }).toList();
   }
@@ -194,7 +201,9 @@ class FvpPlayerController {
       return null;
     }
     final activeTracks = _player!.activeAudioTracks;
-    return activeTracks.isNotEmpty ? activeTracks.first : null;
+    // Fix: If activeTracks is empty, default to track 0 (first track)
+    // This handles the case where the player reports [] but track 0 is actually playing
+    return activeTracks.isNotEmpty ? activeTracks.first : 0;
   }
 
   int? getActiveSubtitleTrackIndex() {
@@ -206,26 +215,43 @@ class FvpPlayerController {
   }
 
   Future<void> setAudioTrack(int trackIndex) async {
-    if (_player == null || !_isInitialized) {
+    // Strict guards to prevent crashes
+    if (_isDisposing || _player == null || !_isInitialized) {
       if (kDebugMode) {
-        debugPrint('FVP: Cannot set audio track - player not initialized');
+        debugPrint('FVP: Cannot set audio track - player not initialized or disposing');
       }
       return;
     }
 
     final audioStreams = _player!.mediaInfo.audio;
-    if (audioStreams == null || 
-        trackIndex < 0 || 
-        trackIndex >= audioStreams.length) {
+    if (audioStreams == null || audioStreams.isEmpty) {
       if (kDebugMode) {
-        debugPrint('FVP: Invalid audio track index: $trackIndex');
+        debugPrint('FVP: No audio streams available');
       }
       return;
     }
 
-    _player!.activeAudioTracks = [trackIndex];
-    if (kDebugMode) {
-      debugPrint('FVP: Set active audio track to index: $trackIndex');
+    // Simple array bounds check - if 4 tracks, valid indices are 0-3
+    // FVP expects array positions, not media file stream IDs
+    if (trackIndex < 0 || trackIndex >= audioStreams.length) {
+      if (kDebugMode) {
+        debugPrint('FVP: Invalid audio track index: $trackIndex. Available: 0-${audioStreams.length - 1}');
+      }
+      return;
+    }
+
+    try {
+      // Set the active audio track using array position
+      _player!.activeAudioTracks = [trackIndex];
+      
+      if (kDebugMode) {
+        debugPrint('FVP: Set active audio track to index: $trackIndex (array position)');
+      }
+    } catch (e) {
+      // Silently handle errors if player is disposed during track change
+      if (kDebugMode && !_isDisposing) {
+        debugPrint('FVP: Error setting audio track: $e');
+      }
     }
   }
 
@@ -358,6 +384,9 @@ class FvpPlayerController {
 
       // Get aspect ratio from media info
       _updateAspectRatio();
+
+      // Set default audio track if none is selected
+      _ensureDefaultAudioTrack();
 
       // Start position updates
       _startPositionUpdates();
@@ -510,6 +539,33 @@ class FvpPlayerController {
       // Default to 16:9 if not available
       _aspectRatio = 16 / 9;
       _aspectRatioController.add(_aspectRatio);
+    }
+  }
+
+  void _ensureDefaultAudioTrack() {
+    // Set default audio track (track 0) if no track is currently active
+    if (_player == null || !_isInitialized || _isDisposing) {
+      return;
+    }
+
+    final audioStreams = _player!.mediaInfo.audio;
+    if (audioStreams == null || audioStreams.isEmpty) {
+      return; // No audio tracks available
+    }
+
+    final activeTracks = _player!.activeAudioTracks;
+    // If no active tracks, set track 0 as default
+    if (activeTracks.isEmpty && audioStreams.isNotEmpty) {
+      try {
+        _player!.activeAudioTracks = [0];
+        if (kDebugMode) {
+          debugPrint('FVP: Set default audio track to index 0');
+        }
+      } catch (e) {
+        if (kDebugMode && !_isDisposing) {
+          debugPrint('FVP: Error setting default audio track: $e');
+        }
+      }
     }
   }
 

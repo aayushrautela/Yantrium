@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
@@ -450,73 +451,78 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildAudioSelectionPopover(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final audioTracks = _getAudioTracks();
+  Widget _buildAudioSelectionPopover(BuildContext parentContext) {
+    final colorScheme = Theme.of(parentContext).colorScheme;
     
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.border,
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Audio Track',
-            style: TextStyle(
-              color: colorScheme.foreground,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+    // Use StatefulBuilder to allow the popover to rebuild when tracks change
+    return StatefulBuilder(
+      builder: (popoverContext, setState) {
+        final audioTracks = _getAudioTracks();
+        
+        return Container(
+          width: 400,
+          height: 450,
+          decoration: BoxDecoration(
+            color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: colorScheme.border,
+              width: 1,
             ),
           ),
-          const Gap(16),
-          if (audioTracks.isEmpty)
-            Text(
-              'No audio tracks available.',
-              style: TextStyle(
-                color: colorScheme.foreground.withValues(alpha: 0.7),
-                fontSize: 14,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header with title
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Text(
+                  'AUDIO TRACK',
+                  style: TextStyle(
+                    color: colorScheme.foreground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
-            )
-          else
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: audioTracks.length,
-                itemBuilder: (context, index) {
-                  final track = audioTracks[index];
-                  final isSelected = track.isActive;
-                  
-                  // Build label with additional info
-                  String label = track.displayName;
-                  if (track.description.isNotEmpty) {
-                    label += ' • ${track.description}';
-                  }
-                  if (track.language != 'Unknown') {
-                    label += ' (${track.language})';
-                  }
-                  
-                  return VideoSafeShadcnItem(
-                    label: label,
-                    isSelected: isSelected,
-                    onTap: () {
-                      _controller.setAudioTrack(track.index);
-                      closeOverlay(context);
+              // Audio tracks list - scrollable section
+              if (audioTracks.isEmpty)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'No audio tracks available.',
+                      style: TextStyle(
+                        color: colorScheme.foreground.withValues(alpha: 0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                    itemCount: audioTracks.length,
+                    itemBuilder: (context, index) {
+                      final track = audioTracks[index];
+                      return _AudioTrackItem(
+                        track: track,
+                        onTap: () {
+                          _controller.setAudioTrack(track.index);
+                          // Rebuild the popover to update selection indicators
+                          setState(() {});
+                          // Don't close the popover - let user close it manually or click outside
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -528,43 +534,47 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return _controller.getSubtitleTracks();
   }
 
-  Widget _buildSubtitleSelectionPopover(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final subtitleTracks = _getSubtitleTracks();
+  Widget _buildSubtitleSelectionPopover(BuildContext parentContext) {
+    final colorScheme = Theme.of(parentContext).colorScheme;
     
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: const Color(0xFF18181B), // Solid dark background - Zinc 900
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.border,
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Subtitles',
-            style: TextStyle(
-              color: colorScheme.foreground,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+    // Use Builder to capture the popover's context
+    return Builder(
+      builder: (popoverContext) {
+        final subtitleTracks = _getSubtitleTracks();
+        
+        return Container(
+          width: 300,
+          decoration: BoxDecoration(
+            color: const Color(0xFF18181B), // Solid dark background - Zinc 900
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: colorScheme.border,
+              width: 1,
             ),
           ),
-          const Gap(16),
-          // Option to disable subtitles
-          VideoSafeShadcnItem(
-            label: 'Off',
-            isSelected: _controller.getActiveSubtitleTrackIndex() == null,
-            onTap: () {
-              _controller.setSubtitleTrack(null);
-              closeOverlay(context);
-            },
-          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Subtitles',
+                style: TextStyle(
+                  color: colorScheme.foreground,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Gap(16),
+              // Option to disable subtitles
+              VideoSafeShadcnItem(
+                label: 'Off',
+                isSelected: _controller.getActiveSubtitleTrackIndex() == null,
+                onTap: () {
+                  _controller.setSubtitleTrack(null);
+                  Navigator.of(popoverContext).pop();
+                },
+              ),
           if (subtitleTracks.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -596,14 +606,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     isSelected: isSelected,
                     onTap: () {
                       _controller.setSubtitleTrack(track.index);
-                      closeOverlay(context);
+                      Navigator.of(popoverContext).pop();
                     },
                   );
                 },
               ),
             ),
-        ],
-      ),
+          ],
+        ),
+      );
+    },
     );
   }
 
@@ -1033,6 +1045,170 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           },
         );
       },
+    );
+  }
+}
+
+/// Audio track item widget matching the design spec
+class _AudioTrackItem extends StatefulWidget {
+  final AudioTrackInfo track;
+  final VoidCallback onTap;
+
+  const _AudioTrackItem({
+    required this.track,
+    required this.onTap,
+  });
+
+  @override
+  State<_AudioTrackItem> createState() => _AudioTrackItemState();
+}
+
+class _AudioTrackItemState extends State<_AudioTrackItem> {
+  bool _isHovered = false;
+
+  String _getChannelConfig(int channels) {
+    switch (channels) {
+      case 1:
+        return 'Mono';
+      case 2:
+        return 'Stereo';
+      case 6:
+        return '5.1';
+      case 8:
+        return '7.1';
+      default:
+        return '${channels}ch';
+    }
+  }
+
+  String _getFormattedSampleRate(int sampleRate) {
+    if (sampleRate >= 1000) {
+      return '${(sampleRate / 1000).toStringAsFixed(0)}kHz';
+    }
+    return '${sampleRate}Hz';
+  }
+
+  String _formatCodec(String codec) {
+    // Format codec names to match common formats
+    final upper = codec.toUpperCase();
+    if (upper.contains('E-AC3') || upper.contains('EAC3')) {
+      return 'E-AC3';
+    }
+    if (upper.contains('AC3')) {
+      return 'AC3';
+    }
+    if (upper.contains('AAC')) {
+      return 'AAC';
+    }
+    if (upper.contains('MP3') || upper.contains('MPEG')) {
+      return 'MP3';
+    }
+    return upper;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isSelected = widget.track.isActive;
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          margin: const EdgeInsets.only(bottom: 2),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF27272A) // Slightly darker background for selected
+                : (_isHovered ? const Color(0xFF27272A) : Colors.transparent),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              // Language name
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.track.language != 'Unknown' 
+                          ? widget.track.language 
+                          : 'Track ${widget.track.index + 1}',
+                      style: TextStyle(
+                        color: colorScheme.foreground,
+                        fontSize: 14,
+                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    // Technical details: "48kHz • 6ch"
+                    Text(
+                      '${_getFormattedSampleRate(widget.track.sampleRate)} • ${widget.track.channels}ch',
+                      style: TextStyle(
+                        color: colorScheme.foreground.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Codec badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF27272A),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: colorScheme.border.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  _formatCodec(widget.track.codec),
+                  style: TextStyle(
+                    color: colorScheme.foreground,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Channel configuration badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF27272A),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: colorScheme.border.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  _getChannelConfig(widget.track.channels),
+                  style: TextStyle(
+                    color: colorScheme.foreground,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Checkmark for selected track
+              if (isSelected)
+                Icon(
+                  Icons.check,
+                  color: colorScheme.primary,
+                  size: 18,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
